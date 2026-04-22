@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { ShieldAlert, RefreshCw } from 'lucide-react';
 
 interface Props {
@@ -77,7 +77,7 @@ class ErrorBoundary extends Component<Props, State> {
           >
             <RefreshCw size={18} /> 새로고침하기
           </button>
-          {process.env.NODE_ENV === 'development' && (
+          {import.meta.env.DEV && (
             <div style={{
               marginTop: '40px',
               padding: '16px',
@@ -96,7 +96,7 @@ class ErrorBoundary extends Component<Props, State> {
       );
     }
 
-    return this.children;
+    return this.props.children;
   }
 }
 

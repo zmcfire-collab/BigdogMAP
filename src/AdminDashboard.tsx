@@ -45,9 +45,10 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
         if (error) throw error;
         setPendingPins(data || []);
       }
-    } catch (err: any) {
-      console.error('Data Fetch Error:', err);
-      alert('데이터를 불러오는 중 오류가 발생했습니다: ' + (err.message || '알 수 없는 오류'));
+    } catch (err) {
+      const error = err as Error;
+      console.error('Data Fetch Error:', error);
+      alert('데이터를 불러오는 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
     } finally {
       setLoading(false);
     }

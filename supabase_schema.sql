@@ -41,12 +41,18 @@ ALTER TABLE public.places ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
 
--- Policies: Everyone can read
+-- Places: Full access (admin manages via front-end auth)
 CREATE POLICY "Allow public read on places" ON public.places FOR SELECT USING (true);
-CREATE POLICY "Allow public read on pins" ON public.pins FOR SELECT USING (status = 'approved');
-CREATE POLICY "Allow public read on reviews" ON public.reviews FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on places" ON public.places FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update on places" ON public.places FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete on places" ON public.places FOR DELETE USING (true);
 
--- Policies: Anyone can insert (Anonymous reporting)
+-- Pins: Full access (admin approves/rejects via front-end auth)
+CREATE POLICY "Allow public read on pins" ON public.pins FOR SELECT USING (true);
 CREATE POLICY "Allow public insert on pins" ON public.pins FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update on pins" ON public.pins FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete on pins" ON public.pins FOR DELETE USING (true);
 
+-- Reviews
+CREATE POLICY "Allow public read on reviews" ON public.reviews FOR SELECT USING (true);
 CREATE POLICY "Allow auth insert on reviews" ON public.reviews FOR INSERT WITH CHECK (auth.role() = 'authenticated');

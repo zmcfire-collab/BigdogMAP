@@ -1,13 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
-import { Map as MapIcon, LayoutGrid, Users, User, Bell, Search, PawPrint, Leaf, Droplets, Edit3, X, ShieldAlert, Navigation } from 'lucide-react';
+import { Map as MapIcon, LayoutGrid, Users, User, Bell, Search, PawPrint, Leaf, Droplets, Edit3, X, ShieldAlert, Navigation, Heart } from 'lucide-react';
 import { AdminDashboard } from './AdminDashboard';
 import { JindoLog } from './JindoLog';
+import { AIGrowthCare } from './AIGrowthCare';
+import { DogNameGenerator } from './DogNameGenerator';
 import { supabase } from './supabase';
+import { APP_CONFIG } from './config';
 import './App.css';
 
 declare global {
   interface Window {
-    naver: any;
+    naver: typeof naver;
   }
 }
 
@@ -43,7 +46,7 @@ const MOCK_PLACES: Place[] = [
 ];
 
 function MainContent() {
-  const [currentTab, setCurrentTab] = useState<'Map' | 'Feed' | 'Growth' | 'Hub' | 'Profile' | 'Admin'>('Map');
+  const [currentTab, setCurrentTab] = useState<'Map' | 'Feed' | 'Growth' | 'AICare' | 'Hub' | 'Profile' | 'Admin'>('Map');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [adminCreds, setAdminCreds] = useState({ id: '', pw: '' });
 
@@ -55,8 +58,8 @@ function MainContent() {
 
   // Map Refs
   const mapRef = useRef<HTMLDivElement>(null);
-  const naverMapInstance = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
+  const naverMapInstance = useRef<naver.maps.Map | null>(null);
+  const markersRef = useRef<naver.maps.Marker[]>([]);
 
   // --- Map Initialization ---
   useEffect(() => {
@@ -82,7 +85,7 @@ function MainContent() {
         console.warn("Naver Maps library not ready or auth failed.");
       }
     }
-  }, [currentTab]);
+  }, [currentTab, userLocation]);
 
   // Sync Markers
   useEffect(() => {
@@ -121,13 +124,13 @@ function MainContent() {
     } catch (err) {
       console.error("Marker Sync Error:", err);
     }
-  }, [places, reports, naverMapInstance.current]);
+  }, [places, reports]);
 
 
   // --- Handlers ---
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminCreds.id === 'admin' && adminCreds.pw === '1111') {
+    if (adminCreds.id === APP_CONFIG.ADMIN.ID && adminCreds.pw === APP_CONFIG.ADMIN.PW) {
       setIsAdminLoggedIn(true);
     } else {
       alert('아이디 또는 비밀번호가 틀렸습니다.');
@@ -172,7 +175,7 @@ function MainContent() {
         return;
       }
       if (data) {
-        const transformed: Place[] = data.map((p: any) => ({
+        const transformed: Place[] = data.map((p) => ({
           id: p.id,
           name: p.name,
           category: p.category,
@@ -430,6 +433,14 @@ function MainContent() {
       return <JindoLog />;
     }
 
+    if (currentTab === 'AICare') {
+      return <AIGrowthCare />;
+    }
+
+    if (currentTab === 'Hub') {
+      return <DogNameGenerator />;
+    }
+
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
         준비 중인 페이지입니다. ({currentTab})
@@ -460,6 +471,10 @@ function MainContent() {
         <div className={`nav-item ${currentTab === 'Growth' ? 'active' : ''}`} onClick={() => setCurrentTab('Growth')}>
           <Users size={24} />
           <span>Growth</span>
+        </div>
+        <div className={`nav-item ${currentTab === 'AICare' ? 'active' : ''}`} onClick={() => setCurrentTab('AICare')}>
+          <Heart size={24} />
+          <span>AI Care</span>
         </div>
         <div className={`nav-item ${currentTab === 'Map' ? 'active' : ''}`} onClick={() => setCurrentTab('Map')}>
           <MapIcon size={24} />

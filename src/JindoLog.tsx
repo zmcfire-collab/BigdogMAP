@@ -7,6 +7,8 @@ import { Activity, ImageIcon, Check, Crop, MousePointer2, ExternalLink, Info, Tr
 import { motion, AnimatePresence } from 'framer-motion';
 import Cropper from 'react-easy-crop';
 import { cn } from './lib/utils';
+import { supabase } from './supabase';
+import { useEffect } from 'react';
 
 // --- Types ---
 interface Hotspot {
@@ -283,7 +285,67 @@ const ImageEditor = ({ image, onSave, onCancel }: {
 export function JindoLog() {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [editingImage, setEditingImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch entries from Supabase
+  useEffect(() => {
+    const fetchEntries = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('jindo_logs')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching jindo logs:', error);
+      } else if (data) {
+        const transformed: LogEntry[] = data.map((d) => ({
+          id: d.id,
+          date: d.log_date,
+          image: d.image_url,
+          filter: d.filter,
+          tags: d.tags || [],
+          hotspots: d.hotspots || []
+        }));
+        setEntries(transformed);
+      }
+      setLoading(false);
+    };
+
+    fetchEntries();
+  }, []);
+
+  const handleSaveEntry = async (data: { image: string, hotspots: Hotspot[], filter: string, tags: string[] }) => {
+    const newLog = {
+      image_url: data.image,
+      log_date: new Date().toLocaleDateString(),
+      filter: data.filter,
+      tags: data.tags,
+      hotspots: data.hotspots
+    };
+
+    const { data: insertedData, error } = await supabase
+      .from('jindo_logs')
+      .insert([newLog])
+      .select();
+
+    if (error) {
+      console.error('Error saving jindo log:', error);
+      alert('저장 중 오류가 발생했습니다.');
+    } else if (insertedData) {
+      const entry: LogEntry = {
+        id: insertedData[0].id,
+        date: insertedData[0].log_date,
+        image: insertedData[0].image_url,
+        filter: insertedData[0].filter,
+        tags: insertedData[0].tags,
+        hotspots: insertedData[0].hotspots
+      };
+      setEntries([entry, ...entries]);
+    }
+    setEditingImage(null);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -321,7 +383,9 @@ export function JindoLog() {
             <button className="text-[#8b5e3c] text-sm font-bold">전체보기</button>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            {entries.length === 0 ? (
+            {loading ? (
+              <div className="col-span-2 py-12 text-center text-gray-500">불러오는 중...</div>
+            ) : entries.length === 0 ? (
               <div className="col-span-2 py-12 text-center space-y-3 bg-[#f0ede8] rounded-3xl border-2 border-dashed border-gray-300">
                 <ImageIcon className="w-12 h-12 text-gray-400 mx-auto" />
                 <p className="text-gray-500 font-medium">첫 번째 기록을 남겨보세요!</p>
@@ -346,15 +410,7 @@ export function JindoLog() {
           <ImageEditor 
             image={editingImage} 
             onCancel={() => setEditingImage(null)}
-            onSave={(data) => {
-              const newEntry: LogEntry = {
-                id: Math.random().toString(36).substr(2, 9),
-                date: new Date().toLocaleDateString(),
-                ...data
-              };
-              setEntries([newEntry, ...entries]);
-              setEditingImage(null);
-            }}
+            onSave={handleSaveEntry}
           />
         )}
       </AnimatePresence>
