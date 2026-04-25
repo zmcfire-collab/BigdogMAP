@@ -25,7 +25,10 @@ interface FeedPost {
   created_at: string;
 }
 
-// --- Canvas Crop Utility ---
+// --- Canvas Crop & Compress Utility ---
+const MAX_PX = 900; // max output dimension (keeps base64 under ~300KB)
+const JPEG_Q = 0.80;
+
 function createImageEl(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -37,12 +40,24 @@ function createImageEl(url: string): Promise<HTMLImageElement> {
 
 async function getCroppedImg(src: string, pixels: CropArea): Promise<string> {
   const image = await createImageEl(src);
+  const scale = Math.min(1, MAX_PX / pixels.width, MAX_PX / pixels.height);
   const canvas = document.createElement('canvas');
-  canvas.width = pixels.width;
-  canvas.height = pixels.height;
+  canvas.width  = Math.round(pixels.width  * scale);
+  canvas.height = Math.round(pixels.height * scale);
   const ctx = canvas.getContext('2d')!;
-  ctx.drawImage(image, pixels.x, pixels.y, pixels.width, pixels.height, 0, 0, pixels.width, pixels.height);
-  return canvas.toDataURL('image/jpeg', 0.92);
+  ctx.drawImage(image, pixels.x, pixels.y, pixels.width, pixels.height, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', JPEG_Q);
+}
+
+async function compressImage(src: string): Promise<string> {
+  const image = await createImageEl(src);
+  const scale = Math.min(1, MAX_PX / image.width, MAX_PX / image.height);
+  const canvas = document.createElement('canvas');
+  canvas.width  = Math.round(image.width  * scale);
+  canvas.height = Math.round(image.height * scale);
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', JPEG_Q);
 }
 
 // --- Constants ---
@@ -105,6 +120,7 @@ export function Feed() {
   const [postTags, setPostTags] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isCropping, setIsCropping] = useState(false);
+  const [dbMissing, setDbMissing] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -119,7 +135,13 @@ export function Feed() {
       .from('feed_posts')
       .select('*')
       .order('created_at', { ascending: false });
-    if (!error && data) setPosts(data);
+    if (error) {
+      if (error.message.includes('does not exist') || error.code === '42P01') {
+        setDbMissing(true);
+      }
+    } else if (data) {
+      setPosts(data);
+    }
     setLoading(false);
   };
 
@@ -149,12 +171,15 @@ export function Feed() {
     if (createStep === 'crop') {
       setIsCropping(true);
       try {
-        const cropped = croppedAreaPixels && croppedAreaPixels.width > 0
+        const out = croppedAreaPixels && croppedAreaPixels.width > 0
           ? await getCroppedImg(rawImage!, croppedAreaPixels)
-          : rawImage!;
-        setCroppedImage(cropped);
-      } catch {
-        setCroppedImage(rawImage!);
+          : await compressImage(rawImage!);
+        setCroppedImage(out);
+      } catch (e) {
+        console.error('Compress error:', e);
+        // last-resort: still compress via canvas even if crop failed
+        try { setCroppedImage(await compressImage(rawImage!)); }
+        catch { setCroppedImage(rawImage!); }
       }
       setIsCropping(false);
       setCreateStep('filter');
@@ -193,7 +218,11 @@ export function Feed() {
       handleClose();
     } else {
       console.error('Feed upload error:', error);
-      alert('업로드 중 오류가 발생했습니다. Supabase에 feed_posts 테이블이 있는지 확인해주세요.');
+      const detail = error?.message ?? '알 수 없는 오류';
+      const hint = detail.includes('does not exist')
+        ? '\n\n➡ Supabase SQL Editor에서 supabase_feed.sql 파일 내용을 실행해주세요.'
+        : '';
+      alert(`업로드 실패: ${detail}${hint}`);
     }
     setIsUploading(false);
   };
@@ -232,6 +261,18 @@ export function Feed() {
   return (
     <div className="flex-1 overflow-y-auto bg-[#fcf9f4] pb-24 relative">
       <div className="max-w-md mx-auto py-6 space-y-6">
+
+        {/* DB 미설치 안내 배너 */}
+        {dbMissing && (
+          <div className="mx-6 bg-amber-50 border border-amber-300 rounded-2xl p-4 space-y-1">
+            <p className="text-sm font-bold text-amber-800">⚠️ Supabase 테이블 설정 필요</p>
+            <p className="text-xs text-amber-700 leading-relaxed">
+              Supabase 대시보드 → SQL Editor 에서{' '}
+              <span className="font-mono font-bold">supabase_feed.sql</span> 파일 내용을 실행해주세요.
+              (jindo_logs 컬럼 추가 + feed_posts 테이블 생성)
+            </p>
+          </div>
+        )}
 
         {/* Stories Row */}
         <section className="px-6 overflow-x-auto">
@@ -388,7 +429,7 @@ export function Feed() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black flex flex-col"
+            className="fixed inset-0 z-[2000] bg-black flex flex-col"
           >
             {/* Modal Header */}
             <header className="h-14 flex items-center justify-between px-4 border-b border-white/10 flex-shrink-0">

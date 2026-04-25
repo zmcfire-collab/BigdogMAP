@@ -39,7 +39,10 @@ interface LogEntry {
   hotspots: Hotspot[];
 }
 
-// --- Canvas Crop Utility ---
+// --- Canvas Crop & Compress Utility ---
+const MAX_PX = 900;
+const JPEG_Q = 0.80;
+
 function createImageElement(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -51,18 +54,28 @@ function createImageElement(url: string): Promise<HTMLImageElement> {
 
 async function getCroppedImg(imageSrc: string, pixelCrop: CropArea): Promise<string> {
   const image = await createImageElement(imageSrc);
+  const scale = Math.min(1, MAX_PX / pixelCrop.width, MAX_PX / pixelCrop.height);
   const canvas = document.createElement('canvas');
-  canvas.width = pixelCrop.width;
-  canvas.height = pixelCrop.height;
+  canvas.width  = Math.round(pixelCrop.width  * scale);
+  canvas.height = Math.round(pixelCrop.height * scale);
   const ctx = canvas.getContext('2d')!;
   ctx.drawImage(
     image,
-    pixelCrop.x, pixelCrop.y,
-    pixelCrop.width, pixelCrop.height,
-    0, 0,
-    pixelCrop.width, pixelCrop.height
+    pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height,
+    0, 0, canvas.width, canvas.height
   );
-  return canvas.toDataURL('image/jpeg', 0.92);
+  return canvas.toDataURL('image/jpeg', JPEG_Q);
+}
+
+async function compressImage(src: string): Promise<string> {
+  const image = await createImageElement(src);
+  const scale = Math.min(1, MAX_PX / image.width, MAX_PX / image.height);
+  const canvas = document.createElement('canvas');
+  canvas.width  = Math.round(image.width  * scale);
+  canvas.height = Math.round(image.height * scale);
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', JPEG_Q);
 }
 
 // --- Components ---
@@ -175,15 +188,14 @@ const ImageEditor = ({ image, onSave, onCancel }: {
   const handleNext = async () => {
     setIsCropping(true);
     try {
-      if (croppedAreaPixels && croppedAreaPixels.width > 0) {
-        const cropped = await getCroppedImg(image, croppedAreaPixels);
-        setCroppedImage(cropped);
-      } else {
-        setCroppedImage(image);
-      }
+      const out = croppedAreaPixels && croppedAreaPixels.width > 0
+        ? await getCroppedImg(image, croppedAreaPixels)
+        : await compressImage(image);
+      setCroppedImage(out);
     } catch (e) {
       console.error('Crop error:', e);
-      setCroppedImage(image);
+      try { setCroppedImage(await compressImage(image)); }
+      catch { setCroppedImage(image); }
     }
     setIsCropping(false);
     setStep('edit');
@@ -210,7 +222,7 @@ const ImageEditor = ({ image, onSave, onCancel }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 flex flex-col md:flex-row">
+    <div className="fixed inset-0 z-[2000] bg-black/90 flex flex-col md:flex-row">
       <header className="absolute top-0 left-0 right-0 h-16 flex items-center justify-between px-6 z-10 bg-gradient-to-b from-black/50 to-transparent">
         <button onClick={onCancel} className="text-white hover:bg-white/20 p-2 rounded-full">
           <ArrowLeft className="w-6 h-6" />
@@ -423,7 +435,11 @@ export function JindoLog() {
 
     if (error) {
       console.error('Error saving jindo log:', error);
-      alert('저장 중 오류가 발생했습니다. Supabase 스키마에 title/content 컬럼이 있는지 확인해주세요.');
+      const detail = error.message ?? '알 수 없는 오류';
+      const hint = detail.includes('does not exist')
+        ? '\n\n➡ Supabase SQL Editor에서 supabase_feed.sql 파일 내용을 실행해주세요.'
+        : '';
+      alert(`저장 실패: ${detail}${hint}`);
     } else if (insertedData) {
       const entry: LogEntry = {
         id: insertedData[0].id,
