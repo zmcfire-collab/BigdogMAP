@@ -1,5 +1,30 @@
 import { useState, useEffect, useRef } from 'react';
-import { Map as MapIcon, LayoutGrid, Users, User, Bell, Search, PawPrint, Leaf, Droplets, Edit3, X, ShieldAlert, Navigation, Heart } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Map as MapIcon, 
+  LayoutGrid, 
+  Users, 
+  User, 
+  Bell, 
+  Search, 
+  PawPrint, 
+  Leaf, 
+  Droplets, 
+  Edit3, 
+  X, 
+  ShieldAlert, 
+  Navigation, 
+  Heart,
+  Sparkles,
+  Share2,
+  ChevronRight,
+  Plus,
+  Settings,
+  ShieldCheck
+} from 'lucide-react';
+import { cn } from './lib/utils';
+import { Feed } from './Feed';
+import { ShareHub } from './ShareHub';
 import { AdminDashboard } from './AdminDashboard';
 import { JindoLog } from './JindoLog';
 import { AIGrowthCare } from './AIGrowthCare';
@@ -55,6 +80,7 @@ function MainContent() {
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [activeFilters, setActiveFilters] = useState<string[]>(['진돗개 환영']);
   const [reports, setReports] = useState<Pin[]>([]);
+  const [hubMode, setHubMode] = useState<'names' | 'share'>('names');
 
   // Map Refs
   const mapRef = useRef<HTMLDivElement>(null);
@@ -243,39 +269,41 @@ function MainContent() {
     if (currentTab === 'Admin') {
       if (!isAdminLoggedIn) {
         return (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0F2F5', padding: '24px' }}>
-            <form onSubmit={handleAdminLogin} style={{ background: 'white', padding: '32px', borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px', textAlign: 'left' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
-                <ShieldAlert size={32} color="#1A73E8" />
-                <h2 style={{ fontSize: '22px', fontWeight: 900 }}>Back-Office Login</h2>
+          <div className="flex-1 flex items-center justify-center bg-[#F0F2F5] p-6">
+            <form onSubmit={handleAdminLogin} className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm space-y-6">
+              <div className="flex items-center gap-3">
+                <ShieldAlert size={32} className="text-[#315926]" />
+                <h2 className="text-2xl font-black text-[#543013]">Admin Login</h2>
               </div>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>Admin ID</label>
-                <input
-                  type="text"
-                  value={adminCreds.id}
-                  onChange={(e) => setAdminCreds({ ...adminCreds, id: e.target.value })}
-                  style={{ width: '100%', padding: '12px', border: '1px solid #DDD', borderRadius: '8px' }}
-                  placeholder="admin"
-                />
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-[#715a4a] mb-1 uppercase tracking-widest">Admin ID</label>
+                  <input
+                    type="text"
+                    value={adminCreds.id}
+                    onChange={(e) => setAdminCreds({ ...adminCreds, id: e.target.value })}
+                    className="w-full p-4 bg-[#fcf9f4] border border-[#ebe8e3] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#315926]/20"
+                    placeholder="admin"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#715a4a] mb-1 uppercase tracking-widest">Password</label>
+                  <input
+                    type="password"
+                    value={adminCreds.pw}
+                    onChange={(e) => setAdminCreds({ ...adminCreds, pw: e.target.value })}
+                    className="w-full p-4 bg-[#fcf9f4] border border-[#ebe8e3] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#315926]/20"
+                    placeholder="1111"
+                  />
+                </div>
               </div>
-              <div style={{ marginBottom: '24px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>Password</label>
-                <input
-                  type="password"
-                  value={adminCreds.pw}
-                  onChange={(e) => setAdminCreds({ ...adminCreds, pw: e.target.value })}
-                  style={{ width: '100%', padding: '12px', border: '1px solid #DDD', borderRadius: '8px' }}
-                  placeholder="1111"
-                />
-              </div>
-              <button type="submit" style={{ width: '100%', padding: '16px', background: '#1A73E8', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 800, cursor: 'pointer' }}>
+              <button type="submit" className="w-full p-4 bg-[#543013] text-white rounded-2xl font-black shadow-lg active:scale-95 transition-all">
                 로그인
               </button>
               <button
                 type="button"
                 onClick={() => setCurrentTab('Map')}
-                style={{ width: '100%', marginTop: '12px', padding: '12px', background: 'transparent', color: '#666', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+                className="w-full p-2 text-[#715a4a] font-bold text-sm"
               >
                 취소
               </button>
@@ -286,36 +314,76 @@ function MainContent() {
       return <AdminDashboard onLogout={() => setIsAdminLoggedIn(false)} />;
     }
 
+    if (currentTab === 'Feed') {
+      return <Feed />;
+    }
+
     if (currentTab === 'Profile') {
       return (
-        <div style={{ padding: '24px', flex: 1, backgroundColor: '#FFF', textAlign: 'left' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ fontSize: '24px', fontWeight: 900, marginBottom: '20px' }}>나의 반려견 일지</h2>
-            <button
-              onClick={() => setCurrentTab('Admin')}
-              style={{ padding: '10px', background: '#F0F2F5', border: 'none', borderRadius: '12px', color: '#666', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <ShieldAlert size={18} /> <span style={{ fontSize: '12px', fontWeight: 800 }}>Admin</span>
-            </button>
-          </div>
-
-          <div style={{ padding: '20px', background: '#F8F8F8', borderRadius: '16px', textAlign: 'center' }}>
-            <div style={{ width: '80px', height: '80px', background: '#DDD', borderRadius: '50%', margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <User size={40} color="#999" />
-            </div>
-            <h3 style={{ fontWeight: 800 }}>백구아빠</h3>
-            <p style={{ fontSize: '14px', color: '#666' }}>newturns302@naver.com</p>
-          </div>
-
-          <div style={{ marginTop: '30px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '16px' }}>방문 인증 사진 올리기</h3>
-            <div style={{ border: '2px dashed #DDD', padding: '40px', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', color: '#999', textAlign: 'center' }}>
-              <Edit3 size={32} />
-              <p>장소를 방문했다면 사진으로 인증해 주세요!</p>
-              <button style={{ background: '#8B5E3C', color: 'white', padding: '12px 24px', border: 'none', borderRadius: '8px', fontWeight: 700 }}>
-                사진 선택하기
+        <div className="flex-1 overflow-y-auto bg-[#fcf9f4] px-6 py-8 pb-32">
+          <div className="max-w-md mx-auto space-y-8">
+            <header className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 rounded-[32px] bg-white border border-[#ebe8e3] flex items-center justify-center text-[#715a4a] shadow-sm relative overflow-hidden">
+                  <User size={40} />
+                  <div className="absolute bottom-0 right-0 w-6 h-6 bg-[#315926] flex items-center justify-center rounded-tl-xl text-white">
+                     <Plus size={14} />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-serif text-[#543013]">백구 아빠</h3>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-[10px] font-black text-[#315926] bg-[#315926]/10 px-2 py-0.5 rounded-full uppercase tracking-widest">Premium Guardian</span>
+                  </div>
+                </div>
+              </div>
+              <button 
+                onClick={() => setCurrentTab('Admin')}
+                className="p-3 bg-white border border-[#ebe8e3] rounded-[20px] text-[#715a4a] hover:bg-[#f0ede9] transition-all shadow-sm active:scale-90"
+              >
+                <ShieldCheck size={22} />
               </button>
+            </header>
+
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: '활동 핀', count: '12' },
+                { label: '기록', count: '48' },
+                { label: '리워드', count: '2.5k' }
+              ].map((stat, i) => (
+                <div key={i} className="bg-white p-5 rounded-[28px] border border-[#ebe8e3] text-center shadow-sm">
+                  <p className="text-2xl font-serif text-[#543013]">{stat.count}</p>
+                  <p className="text-[9px] font-black text-[#715a4a] uppercase tracking-widest mt-1 opacity-60">{stat.label}</p>
+                </div>
+              ))}
             </div>
+
+            <div className="space-y-3">
+              <h4 className="text-xs font-black text-[#715a4a] uppercase tracking-widest px-1 opacity-60">Account Settings</h4>
+              {[
+                { icon: <Bell size={20} />, label: '알림 및 푸시 설정', right: 'On' },
+                { icon: <Heart size={20} />, label: '찜한 장소 보관함' },
+                { icon: <Users size={20} />, label: '커뮤니티 활동 관리' },
+                { icon: <Settings size={20} />, label: '개인정보 보호 설정' }
+              ].map((item, i) => (
+                <button key={i} className="w-full bg-white p-5 rounded-[28px] border border-[#ebe8e3] shadow-sm flex items-center justify-between group hover:bg-[#315926]/5 transition-all text-[#543013]">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2.5 bg-[#fcf9f4] rounded-2xl text-[#715a4a] group-hover:text-[#315926] transition-colors">
+                      {item.icon}
+                    </div>
+                    <span className="text-sm font-bold">{item.label}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {item.right && <span className="text-[10px] font-black text-[#315926] uppercase">{item.right}</span>}
+                    <ChevronRight size={18} className="opacity-20 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <button className="w-full p-5 bg-[#315926]/5 border border-dashed border-[#315926]/30 rounded-[28px] text-[#315926] font-bold text-sm flex items-center justify-center gap-2">
+                <Plus size={18} /> 친구 초대하고 포인트 받기
+            </button>
           </div>
         </div>
       );
@@ -323,7 +391,7 @@ function MainContent() {
 
     if (currentTab === 'Map') {
       return (
-        <main className="map-container">
+        <main className="map-container relative">
           <div className="filter-container">
             {['진돗개 환영', '10kg+ 가능', '입마개 미필수', '실외 배변 명당'].map(label => (
               <button
@@ -340,91 +408,93 @@ function MainContent() {
           <div 
             id="map" 
             ref={mapRef} 
-            style={{ width: '100%', height: '100%', minHeight: '300px', backgroundColor: '#F0F2F5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontSize: '14px' }} 
+            className="w-full h-full min-h-[300px] bg-[#F0F2F5]"
           >
-            {!window.naver?.maps && <div>지도를 불러오지 못했습니다. <br/>(네이버 API 인증 정보를 확인해주세요)</div>}
+            {!window.naver?.maps && <div className="flex items-center justify-center h-full text-center p-8 text-[#715a4a] font-bold">지도를 불러오지 못했습니다. <br/>(네이버 API 인증 정보를 확인해주세요)</div>}
           </div>
 
-          {/* Floating Action Buttons for Reporting */}
-          <div style={{ position: 'absolute', right: '16px', bottom: selectedPlace ? '410px' : '40px', display: 'flex', flexDirection: 'column', gap: '12px', zIndex: 1000, transition: 'bottom 0.3s' }}>
-            <button
+          <div className="absolute right-4 bottom-[50px] flex flex-col gap-3 z-[1000]">
+            <motion.button
+              whileTap={{ scale: 0.9 }}
               onClick={() => handleAddReport('GREEN')}
-              title="Green Pin"
-              style={{ background: '#305C38', color: 'white', width: '56px', height: '56px', borderRadius: '50%', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              className="w-14 h-14 bg-[#315926] text-white rounded-2xl shadow-xl flex items-center justify-center border-2 border-white/20"
             >
-              <PawPrint size={24} />
-            </button>
-            <button
+              <Plus size={28} />
+            </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.9 }}
               onClick={() => handleAddReport('RED')}
-              title="Red Pin"
-              style={{ background: '#D32F2F', color: 'white', width: '56px', height: '56px', borderRadius: '50%', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              className="w-14 h-14 bg-[#ba1a1a] text-white rounded-2xl shadow-xl flex items-center justify-center border-2 border-white/20"
             >
-              <div style={{ fontWeight: 800, fontSize: '20px' }}>!</div>
-            </button>
+              <ShieldAlert size={28} />
+            </motion.button>
           </div>
 
-          {selectedPlace && (
-            <div className="bottom-sheet" style={{ transform: 'translateY(0)' }}>
-              <div className="handle" />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ textAlign: 'left' }}>
-                  <h2 style={{ fontSize: '24px', fontWeight: 900 }}>{selectedPlace.name}</h2>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#1A73E8', fontSize: '13px', fontWeight: 700, marginTop: '4px' }}>
-                    <Leaf size={16} fill="currentColor" />
-                    <span>진돗개 친화적 인증 장소</span>
+          <AnimatePresence>
+            {selectedPlace && (
+              <motion.div 
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                className="bottom-sheet"
+              >
+                <div className="handle" onClick={() => setSelectedPlace(null)} />
+                <div className="p-2">
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="space-y-1">
+                      <h2 className="text-3xl font-serif text-[#543013]">{selectedPlace.name}</h2>
+                      <div className="flex items-center gap-1.5 text-[#315926] font-black text-[10px] uppercase tracking-widest">
+                        <Leaf size={14} fill="currentColor" /> Jindo-Friendly Certified
+                      </div>
+                    </div>
+                    <button onClick={() => setSelectedPlace(null)} className="p-2 bg-[#f0ede9] rounded-full text-[#715a4a]">
+                        <X size={20} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3 mb-8">
+                    {[
+                        { icon: <PawPrint size={20} color="#8B5E3C" />, label: '대형견 가능' },
+                        { icon: <Leaf size={20} color="#315926" />, label: '잔디밭' },
+                        { icon: <Droplets size={20} color="#0277BD" />, label: '식수대' }
+                    ].map((feat, i) => (
+                        <div key={i} className="flex flex-col items-center gap-2 p-4 bg-[#fcf9f4] rounded-[24px] border border-[#ebe8e3]">
+                            {feat.icon}
+                            <span className="text-[10px] font-bold text-[#715a4a]">{feat.label}</span>
+                        </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-black text-[#543013] uppercase tracking-widest opacity-60">최근 보호자 리뷰</h3>
+                    <div className="bg-white p-5 rounded-[28px] border border-[#ebe8e3] shadow-sm space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-[#fcf9f4] flex items-center justify-center border border-[#ebe8e3] text-[#715a4a]">
+                          <User size={20} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-[#543013]">백구 (14kg)</p>
+                          <p className="text-[10px] text-[#715a4a]">2시간 전 · <span className="text-[#315926]">Verified</span></p>
+                        </div>
+                      </div>
+                      <p className="text-sm text-[#715a4a] leading-relaxed">
+                        진도 아이들도 눈치 안 보고 산책하기 정말 좋아요! 잔디가 넓어서 실외 배배하기기도 편하고 사람도 적당해서 좋았습니다. 다시 꼭 방문할 예정이에요!
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 mt-8 pb-4">
+                     <button className="flex-1 p-5 bg-[#543013] text-white rounded-[24px] font-black shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all">
+                        <Navigation size={20} /> 길찾기
+                     </button>
+                     <button className="flex-1 p-5 bg-white border border-[#543013] text-[#543013] rounded-[24px] font-black flex items-center justify-center gap-2 active:scale-95 transition-all">
+                        <Edit3 size={20} /> 리뷰 작성
+                     </button>
                   </div>
                 </div>
-                <button
-                  onClick={() => setSelectedPlace(null)}
-                  style={{ background: '#EEE', border: 'none', padding: '8px', borderRadius: '50%', color: '#666', display: 'flex' }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
-                <div className="chip" style={{ flex: 1, padding: '12px', justifyContent: 'center', flexDirection: 'column', height: 'auto', background: '#F8F8F8' }}>
-                  <PawPrint size={20} color="#8B5E3C" />
-                  <span style={{ fontSize: '11px', marginTop: '4px' }}>대형견 가능</span>
-                </div>
-                <div className="chip" style={{ flex: 1, padding: '12px', justifyContent: 'center', flexDirection: 'column', height: 'auto', background: '#F8F8F8' }}>
-                  <Leaf size={20} color="#4C6B4F" />
-                  <span style={{ fontSize: '11px', marginTop: '4px' }}>넓은 잔디밭</span>
-                </div>
-                <div className="chip" style={{ flex: 1, padding: '12px', justifyContent: 'center', flexDirection: 'column', height: 'auto', background: '#F8F8F8' }}>
-                  <Droplets size={20} color="#0277BD" />
-                  <span style={{ fontSize: '11px', marginTop: '4px' }}>식수대 완비</span>
-                </div>
-              </div>
-
-              <div style={{ marginTop: '24px', textAlign: 'left' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 700 }}>최근 진도 보호자 리뷰</h3>
-                <div className="review-card">
-                  <div className="review-user">
-                    <div className="user-avatar" style={{ background: '#CCC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <User size={20} color="#FFF" />
-                    </div>
-                    <div className="user-info">
-                      <div className="name">백구 (14kg)</div>
-                      <div className="meta">2시간 전</div>
-                    </div>
-                  </div>
-                  <p style={{ fontSize: '13px', color: '#444' }}>
-                    진도 아이들도 눈치 안 보고 산책하기 정말 좋아요! 잔디가 넓어서 실외 배배하기기도 편하고 사람도 적당해서 좋았습니다.
-                  </p>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-                <button style={{ flex: 1, padding: '16px', background: '#446889', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                  <Navigation size={18} /> 길찾기
-                </button>
-                <button style={{ flex: 1, padding: '16px', background: '#8B5E3C', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                  <Edit3 size={18} /> 리뷰 작성
-                </button>
-              </div>
-            </div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </main>
       );
     }
@@ -438,11 +508,44 @@ function MainContent() {
     }
 
     if (currentTab === 'Hub') {
-      return <DogNameGenerator />;
+      return (
+        <div className="flex-1 overflow-y-auto bg-[#fcf9f4] px-6 py-8 pb-32">
+            <div className="max-w-md mx-auto space-y-8">
+                <header className="space-y-1">
+                    <h2 className="text-3xl font-serif text-[#543013]">{hubMode === 'names' ? 'AI 이름 천재' : '공유 허브'}</h2>
+                    <p className="text-xs text-[#715a4a] font-bold uppercase tracking-widest">{hubMode === 'names' ? 'Identity recommendation' : 'Multi-channel distribution'}</p>
+                </header>
+
+                <div className="flex bg-[#f0ede9] p-1.5 rounded-[24px] border border-[#ebe8e3]">
+                    <button 
+                        onClick={() => setHubMode('names')}
+                        className={cn("flex-1 py-3.5 px-4 rounded-[20px] text-[11px] font-black uppercase tracking-wider transition-all", hubMode === 'names' ? "bg-white shadow-md text-[#543013]" : "text-[#715a4a] opacity-60")}
+                    >
+                        <Sparkles size={16} className="inline mr-2" /> Name Genius
+                    </button>
+                    <button 
+                        onClick={() => setHubMode('share')}
+                        className={cn("flex-1 py-3.5 px-4 rounded-[20px] text-[11px] font-black uppercase tracking-wider transition-all", hubMode === 'share' ? "bg-white shadow-md text-[#543013]" : "text-[#715a4a] opacity-60")}
+                    >
+                        <Share2 size={16} className="inline mr-2" /> Share Hub
+                    </button>
+                </div>
+
+                <motion.div
+                    key={hubMode}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                >
+                    {hubMode === 'names' ? <DogNameGenerator /> : <ShareHub />}
+                </motion.div>
+            </div>
+        </div>
+      );
     }
 
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+      <div className="flex-1 flex items-center justify-center text-[#715a4a] font-bold">
         준비 중인 페이지입니다. ({currentTab})
       </div>
     );
@@ -470,18 +573,18 @@ function MainContent() {
         </div>
         <div className={`nav-item ${currentTab === 'Growth' ? 'active' : ''}`} onClick={() => setCurrentTab('Growth')}>
           <Users size={24} />
-          <span>Growth</span>
+          <span>Log</span>
         </div>
         <div className={`nav-item ${currentTab === 'AICare' ? 'active' : ''}`} onClick={() => setCurrentTab('AICare')}>
           <Heart size={24} />
-          <span>AI Care</span>
+          <span>Care</span>
         </div>
         <div className={`nav-item ${currentTab === 'Map' ? 'active' : ''}`} onClick={() => setCurrentTab('Map')}>
           <MapIcon size={24} />
           <span>Map</span>
         </div>
         <div className={`nav-item ${currentTab === 'Hub' ? 'active' : ''}`} onClick={() => setCurrentTab('Hub')}>
-          <Edit3 size={24} />
+          <Sparkles size={24} />
           <span>Hub</span>
         </div>
         <div className={`nav-item ${currentTab === 'Profile' ? 'active' : ''}`} onClick={() => setCurrentTab('Profile')}>
