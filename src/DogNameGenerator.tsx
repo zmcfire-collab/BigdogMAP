@@ -170,22 +170,12 @@ export function DogNameGenerator() {
 
           <div>
             <label className="block text-xs font-bold text-[#6f4627] mb-2 ml-1">모색 (Color)</label>
-            <div className="grid grid-cols-3 gap-2">
-              {['백구', '황구', '흑구'].map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setColor(c)}
-                  className={cn(
-                    'py-2.5 px-3 rounded-xl font-bold text-sm transition-all border-2',
-                    color === c
-                      ? 'bg-white border-[#6f4627] text-[#6f4627] shadow-md'
-                      : 'bg-white border-transparent text-stone-500 shadow-sm'
-                  )}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
+            <input
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              className="w-full bg-white rounded-2xl py-3 px-5 text-sm shadow-sm border-none focus:outline-none focus:ring-2 focus:ring-[#6f4627]/20"
+              placeholder="예: 백구, 황구, 재구, 호구 등"
+            />
           </div>
 
           <div>

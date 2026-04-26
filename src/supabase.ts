@@ -8,6 +8,36 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+export const signInWithGoogle = async () => {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin,
+    },
+  });
+  if (error) console.error('Google login error:', error);
+};
+
+export const signInWithApple = async () => {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'apple',
+    options: {
+      redirectTo: window.location.origin,
+    },
+  });
+  if (error) console.error('Apple login error:', error);
+};
+
+export const signInWithFacebook = async () => {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'facebook',
+    options: {
+      redirectTo: window.location.origin,
+    },
+  });
+  if (error) console.error('Facebook login error:', error);
+};
+
 // --- SQL TO RUN IN SUPABASE SQL EDITOR ---
 /*
   [supabase_schema.sql](file:///n:/개인/!!!!!!!!APP제작/대견할지도/supabase_schema.sql) 

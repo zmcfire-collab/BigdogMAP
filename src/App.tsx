@@ -29,7 +29,7 @@ import { AdminDashboard } from './AdminDashboard';
 import { JindoLog } from './JindoLog';
 import { AIGrowthCare } from './AIGrowthCare';
 import { DogNameGenerator } from './DogNameGenerator';
-import { supabase } from './supabase';
+import { supabase, signInWithGoogle, signInWithApple, signInWithFacebook } from './supabase';
 import { APP_CONFIG } from './config';
 import './App.css';
 
@@ -74,6 +74,21 @@ function MainContent() {
   const [currentTab, setCurrentTab] = useState<'Map' | 'Feed' | 'Growth' | 'AICare' | 'Hub' | 'Profile' | 'Admin'>('Map');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [adminCreds, setAdminCreds] = useState({ id: '', pw: '' });
+  const [userSession, setUserSession] = useState<any>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUserSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const [places, setPlaces] = useState<Place[]>(MOCK_PLACES);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(MOCK_PLACES[0]);
@@ -319,30 +334,92 @@ function MainContent() {
     }
 
     if (currentTab === 'Profile') {
+      if (!userSession) {
+        return (
+          <div className="flex-1 overflow-y-auto bg-[#fcf9f4] px-6 py-8 pb-32">
+            <div className="max-w-md mx-auto space-y-8">
+              <header className="space-y-2">
+                <h2 className="text-3xl font-serif text-[#543013]">환영합니다!</h2>
+                <p className="text-sm text-[#715a4a]">로그인하여 나만의 산책 로그와 <br/>반려견 성장 카드를 관리해보세요.</p>
+              </header>
+
+              <div className="space-y-4">
+                <button 
+                  onClick={signInWithGoogle}
+                  className="w-full h-[60px] bg-white border border-[#ebe8e3] rounded-[24px] flex items-center justify-center gap-4 shadow-sm hover:bg-gray-50 transition-all group"
+                >
+                  <img src="https://www.google.com/favicon.ico" className="w-5 h-5 opacity-70 group-hover:opacity-100" />
+                  <span className="text-sm font-black text-[#543013]">Google로 시작하기</span>
+                </button>
+
+                <button 
+                  onClick={signInWithApple}
+                  className="w-full h-[60px] bg-[#000000] text-white rounded-[24px] flex items-center justify-center gap-4 shadow-lg hover:bg-gray-900 transition-all"
+                >
+                  <svg viewBox="0 0 384 512" width="20" height="20" fill="currentColor">
+                    <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/>
+                  </svg>
+                  <span className="text-sm font-black">Apple로 시작하기</span>
+                </button>
+
+                <button 
+                  onClick={signInWithFacebook}
+                  className="w-full h-[60px] bg-[#1877F2] text-white rounded-[24px] flex items-center justify-center gap-4 shadow-lg hover:bg-[#166fe5] transition-all"
+                >
+                  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                  </svg>
+                  <span className="text-sm font-black text-white">Facebook으로 로그인</span>
+                </button>
+              </div>
+
+              <div className="pt-8 border-t border-[#ebe8e3] text-center">
+                <p className="text-[10px] text-[#715a4a] leading-relaxed opacity-60">
+                   로그인 시 대견할지도의 <span className="underline">이용약관</span> 및 <span className="underline">개인정보 처리방침</span>에 동의하게 됩니다.
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="flex-1 overflow-y-auto bg-[#fcf9f4] px-6 py-8 pb-32">
           <div className="max-w-md mx-auto space-y-8">
             <header className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-20 h-20 rounded-[32px] bg-white border border-[#ebe8e3] flex items-center justify-center text-[#715a4a] shadow-sm relative overflow-hidden">
-                  <User size={40} />
+                  {userSession.user?.user_metadata?.avatar_url ? (
+                    <img src={userSession.user.user_metadata.avatar_url} className="w-full h-full object-cover" />
+                  ) : (
+                    <User size={40} />
+                  )}
                   <div className="absolute bottom-0 right-0 w-6 h-6 bg-[#315926] flex items-center justify-center rounded-tl-xl text-white">
                      <Plus size={14} />
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-2xl font-serif text-[#543013]">백구 아빠</h3>
+                  <h3 className="text-2xl font-serif text-[#543013]">{userSession.user?.user_metadata?.full_name || '보호자님'}</h3>
                   <div className="flex items-center gap-1.5 mt-1">
                     <span className="text-[10px] font-black text-[#315926] bg-[#315926]/10 px-2 py-0.5 rounded-full uppercase tracking-widest">Premium Guardian</span>
                   </div>
                 </div>
               </div>
-              <button 
-                onClick={() => setCurrentTab('Admin')}
-                className="p-3 bg-white border border-[#ebe8e3] rounded-[20px] text-[#715a4a] hover:bg-[#f0ede9] transition-all shadow-sm active:scale-90"
-              >
-                <ShieldCheck size={22} />
-              </button>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => supabase.auth.signOut()}
+                  className="p-3 bg-white border border-[#ebe8e3] rounded-[20px] text-[#ba1a1a] hover:bg-red-50 transition-all shadow-sm active:scale-90"
+                  title="로그아웃"
+                >
+                  <X size={20} />
+                </button>
+                <button 
+                  onClick={() => setCurrentTab('Admin')}
+                  className="p-3 bg-white border border-[#ebe8e3] rounded-[20px] text-[#715a4a] hover:bg-[#f0ede9] transition-all shadow-sm active:scale-90"
+                >
+                  <ShieldCheck size={22} />
+                </button>
+              </div>
             </header>
 
             <div className="grid grid-cols-3 gap-3">
