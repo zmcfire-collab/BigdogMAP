@@ -6,9 +6,38 @@ import { cn } from './lib/utils';
 export function ShareHub() {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+    } catch {
+      // fallback
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleShare = async (platform: string) => {
+    const shareData = {
+      title: '대견할지도 — 진돗개 친화 장소 지도',
+      text: '진돗개와 함께 가기 좋은 장소를 발견했어요! 🐾',
+      url: window.location.href,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch {
+        // 사용자가 취소하거나 지원 안 되면 플랫폼 URL로 이동
+      }
+    }
+
+    const fallbacks: Record<string, string> = {
+      Instagram: 'https://www.instagram.com/',
+      TikTok: 'https://www.tiktok.com/',
+      Youtube: 'https://www.youtube.com/',
+    };
+    window.open(fallbacks[platform] ?? window.location.href, '_blank');
   };
 
   return (
@@ -31,9 +60,10 @@ export function ShareHub() {
             { icon: <TikTok />, label: 'TikTok', color: 'bg-black' },
             { icon: <Youtube />, label: 'Shorts', color: 'bg-[#ff0000]' }
           ].map((channel, i) => (
-            <motion.button 
+            <motion.button
               key={i}
               whileTap={{ scale: 0.95 }}
+              onClick={() => handleShare(channel.label)}
               className="flex flex-col items-center gap-2 p-4 rounded-[24px] bg-[#fcf9f4] border border-[#ebe8e3] group transition-all hover:bg-white hover:shadow-md"
             >
               <div className={cn("w-10 h-10 rounded-full flex items-center justify-center text-white shadow-sm", channel.color)}>
@@ -85,16 +115,19 @@ export function ShareHub() {
 
       {/* Export Options */}
       <section className="grid grid-cols-2 gap-4 pb-12">
-          <button 
-           onClick={handleCopy}
-           className="bg-white p-4 rounded-[24px] border border-[#ebe8e3] flex flex-col items-center gap-2 shadow-sm active:scale-95 transition-all text-[#715a4a] hover:text-[#543013]"
+          <button
+            onClick={handleCopy}
+            className="bg-white p-4 rounded-[24px] border border-[#ebe8e3] flex flex-col items-center gap-2 shadow-sm active:scale-95 transition-all text-[#715a4a] hover:text-[#543013]"
           >
-              {copied ? <Check className="text-[#315926]" /> : <Copy />}
-              <span className="text-xs font-bold">{copied ? '복사됨!' : '링크 복사'}</span>
+            {copied ? <Check className="text-[#315926]" /> : <Copy />}
+            <span className="text-xs font-bold">{copied ? '복사됨!' : '링크 복사'}</span>
           </button>
-          <button className="bg-[#543013] p-4 rounded-[24px] flex flex-col items-center gap-2 shadow-sm active:scale-95 transition-all text-[#f9dac6] hover:bg-[#6f4627]">
-              <Download />
-              <span className="text-xs font-bold text-white">영상 다운로드</span>
+          <button
+            onClick={() => handleShare('')}
+            className="bg-[#543013] p-4 rounded-[24px] flex flex-col items-center gap-2 shadow-sm active:scale-95 transition-all text-[#f9dac6] hover:bg-[#6f4627]"
+          >
+            <Download />
+            <span className="text-xs font-bold text-white">공유하기</span>
           </button>
       </section>
     </div>

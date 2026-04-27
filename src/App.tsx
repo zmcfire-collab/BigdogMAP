@@ -1,27 +1,29 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Map as MapIcon, 
-  LayoutGrid, 
-  Users, 
-  User, 
-  Bell, 
-  Search, 
-  PawPrint, 
-  Leaf, 
-  Droplets, 
-  Edit3, 
-  X, 
-  ShieldAlert, 
-  Navigation, 
+import {
+  Map as MapIcon,
+  LayoutGrid,
+  Users,
+  User,
+  Bell,
+  Search,
+  PawPrint,
+  Leaf,
+  Droplets,
+  Edit3,
+  X,
+  ShieldAlert,
+  Navigation,
   Heart,
   Sparkles,
   Share2,
   ChevronRight,
   Plus,
   Settings,
-  ShieldCheck
+  ShieldCheck,
+  Star
 } from 'lucide-react';
+import { ReviewModal } from './ReviewModal';
 import { cn } from './lib/utils';
 import { Feed } from './Feed';
 import { ShareHub } from './ShareHub';
@@ -96,6 +98,19 @@ function MainContent() {
   const [activeFilters, setActiveFilters] = useState<string[]>(['진돗개 환영']);
   const [reports, setReports] = useState<Pin[]>([]);
   const [hubMode, setHubMode] = useState<'names' | 'share'>('names');
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [placeReviews, setPlaceReviews] = useState<any[]>([]);
+  const [profileStats, setProfileStats] = useState({ pins: 0, logs: 0, rewards: 0 });
+
+  const filteredPlaces = useMemo(() => {
+    if (activeFilters.length === 0) return places;
+    return places.filter(place =>
+      activeFilters.some(filter => {
+        if (filter === '진돗개 환영') return place.isJindoCertified;
+        return place.tags.some(tag => tag.includes(filter) || filter.includes(tag));
+      })
+    );
+  }, [places, activeFilters]);
 
   // Map Refs
   const mapRef = useRef<HTMLDivElement>(null);
@@ -137,8 +152,8 @@ function MainContent() {
       markersRef.current.forEach(m => m.setMap(null));
       markersRef.current = [];
 
-      // Add Places
-      places.forEach(place => {
+      // Add Places (필터 적용)
+      filteredPlaces.forEach(place => {
         const marker = new window.naver.maps.Marker({
           position: new window.naver.maps.LatLng(place.lat, place.lng),
           map: naverMapInstance.current,
@@ -165,7 +180,7 @@ function MainContent() {
     } catch (err) {
       console.error("Marker Sync Error:", err);
     }
-  }, [places, reports]);
+  }, [filteredPlaces, reports]);
 
 
   // --- Handlers ---
@@ -200,6 +215,13 @@ function MainContent() {
     }
   };
 
+
+  const handleNavigate = (place: Place) => {
+    window.open(
+      `https://map.naver.com/index.nhn?elng=${place.lng}&elat=${place.lat}&etext=${encodeURIComponent(place.name)}&menu=route`,
+      '_blank'
+    );
+  };
 
   const toggleFilter = (label: string) => {
     setActiveFilters(prev =>
@@ -255,6 +277,37 @@ function MainContent() {
     return () => {
       supabase.removeChannel(pinSubscription);
     };
+  }, []);
+
+  // 선택된 장소의 리뷰 불러오기
+  useEffect(() => {
+    if (!selectedPlace) { setPlaceReviews([]); return; }
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-/.test(selectedPlace.id);
+    if (!isUUID) { setPlaceReviews([]); return; }
+    supabase
+      .from('reviews')
+      .select('*')
+      .eq('place_id', selectedPlace.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setPlaceReviews(data ?? []));
+  }, [selectedPlace]);
+
+  // 프로필 통계 불러오기
+  useEffect(() => {
+    const fetchStats = async () => {
+      const [pinsRes, logsRes, postsRes] = await Promise.all([
+        supabase.from('pins').select('id', { count: 'exact', head: true }),
+        supabase.from('jindo_logs').select('id', { count: 'exact', head: true }),
+        supabase.from('feed_posts').select('likes'),
+      ]);
+      const totalLikes = (postsRes.data ?? []).reduce((s: number, p: { likes: number }) => s + (p.likes ?? 0), 0);
+      setProfileStats({
+        pins: pinsRes.count ?? 0,
+        logs: logsRes.count ?? 0,
+        rewards: totalLikes,
+      });
+    };
+    fetchStats();
   }, []);
 
   // GPS Location
@@ -424,9 +477,9 @@ function MainContent() {
 
             <div className="grid grid-cols-3 gap-3">
               {[
-                { label: '활동 핀', count: '12' },
-                { label: '기록', count: '48' },
-                { label: '리워드', count: '2.5k' }
+                { label: '활동 핀', count: String(profileStats.pins) },
+                { label: '기록', count: String(profileStats.logs) },
+                { label: '리워드', count: profileStats.rewards >= 1000 ? `${(profileStats.rewards / 1000).toFixed(1)}k` : String(profileStats.rewards) }
               ].map((stat, i) => (
                 <div key={i} className="bg-white p-5 rounded-[28px] border border-[#ebe8e3] text-center shadow-sm">
                   <p className="text-2xl font-serif text-[#543013]">{stat.count}</p>
@@ -543,28 +596,50 @@ function MainContent() {
                   </div>
 
                   <div className="space-y-4">
-                    <h3 className="text-sm font-black text-[#543013] uppercase tracking-widest opacity-60">최근 보호자 리뷰</h3>
-                    <div className="bg-white p-5 rounded-[28px] border border-[#ebe8e3] shadow-sm space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[#fcf9f4] flex items-center justify-center border border-[#ebe8e3] text-[#715a4a]">
-                          <User size={20} />
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-[#543013]">백구 (14kg)</p>
-                          <p className="text-[10px] text-[#715a4a]">2시간 전 · <span className="text-[#315926]">Verified</span></p>
-                        </div>
+                    <h3 className="text-sm font-black text-[#543013] uppercase tracking-widest opacity-60">
+                      최근 보호자 리뷰{placeReviews.length > 0 ? ` (${placeReviews.length})` : ''}
+                    </h3>
+                    {placeReviews.length === 0 ? (
+                      <div className="bg-white p-5 rounded-[28px] border border-[#ebe8e3] text-center text-sm text-[#715a4a] py-6 opacity-60">
+                        아직 리뷰가 없어요. 첫 번째 리뷰를 남겨보세요!
                       </div>
-                      <p className="text-sm text-[#715a4a] leading-relaxed">
-                        진도 아이들도 눈치 안 보고 산책하기 정말 좋아요! 잔디가 넓어서 실외 배배하기기도 편하고 사람도 적당해서 좋았습니다. 다시 꼭 방문할 예정이에요!
-                      </p>
-                    </div>
+                    ) : (
+                      placeReviews.slice(0, 2).map((review: any) => (
+                        <div key={review.id} className="bg-white p-5 rounded-[28px] border border-[#ebe8e3] shadow-sm space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-[#fcf9f4] flex items-center justify-center border border-[#ebe8e3] text-[#715a4a]">
+                                <User size={20} />
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-[#543013]">
+                                  {review.user_nickname}
+                                  {review.user_pet_breed ? ` (${review.user_pet_breed}${review.user_pet_weight ? ` · ${review.user_pet_weight}kg` : ''})` : ''}
+                                </p>
+                                <p className="text-[10px] text-[#715a4a]">{new Date(review.created_at).toLocaleDateString('ko-KR')}</p>
+                              </div>
+                            </div>
+                            <div className="flex">
+                              {[1,2,3,4,5].map(s => (
+                                <Star key={s} size={11} className={s <= review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'} />
+                              ))}
+                            </div>
+                          </div>
+                          <p className="text-sm text-[#715a4a] leading-relaxed">{review.content}</p>
+                        </div>
+                      ))
+                    )}
                   </div>
 
                   <div className="flex gap-4 mt-8 pb-4">
-                     <button className="flex-1 p-5 bg-[#543013] text-white rounded-[24px] font-black shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all">
+                     <button
+                       onClick={() => handleNavigate(selectedPlace)}
+                       className="flex-1 p-5 bg-[#543013] text-white rounded-[24px] font-black shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all">
                         <Navigation size={20} /> 길찾기
                      </button>
-                     <button className="flex-1 p-5 bg-white border border-[#543013] text-[#543013] rounded-[24px] font-black flex items-center justify-center gap-2 active:scale-95 transition-all">
+                     <button
+                       onClick={() => setShowReviewModal(true)}
+                       className="flex-1 p-5 bg-white border border-[#543013] text-[#543013] rounded-[24px] font-black flex items-center justify-center gap-2 active:scale-95 transition-all">
                         <Edit3 size={20} /> 리뷰 작성
                      </button>
                   </div>
@@ -642,6 +717,24 @@ function MainContent() {
       </header>
 
       {renderActiveTabContent()}
+
+      <AnimatePresence>
+        {showReviewModal && selectedPlace && (
+          <ReviewModal
+            place={selectedPlace}
+            onClose={() => {
+              setShowReviewModal(false);
+              // 모달 닫은 후 리뷰 목록 갱신
+              const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-/.test(selectedPlace.id);
+              if (isUUID) {
+                supabase.from('reviews').select('*').eq('place_id', selectedPlace.id)
+                  .order('created_at', { ascending: false })
+                  .then(({ data }) => setPlaceReviews(data ?? []));
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       <nav className="bottom-nav">
         <div className={`nav-item ${currentTab === 'Feed' ? 'active' : ''}`} onClick={() => setCurrentTab('Feed')}>

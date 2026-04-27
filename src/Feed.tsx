@@ -7,6 +7,7 @@ import {
 import Cropper from 'react-easy-crop';
 import { supabase } from './supabase';
 import { cn } from './lib/utils';
+import { CommentSheet } from './CommentSheet';
 
 // --- Types ---
 interface CropArea { x: number; y: number; width: number; height: number; }
@@ -104,6 +105,8 @@ export function Feed() {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const [commentPostId, setCommentPostId] = useState<string | null>(null);
 
   // Create post flow
   const [showCreate, setShowCreate] = useState(false);
@@ -141,6 +144,19 @@ export function Feed() {
       }
     } else if (data) {
       setPosts(data);
+      // 댓글 수 가져오기
+      const ids = data.map((p: FeedPost) => p.id);
+      if (ids.length > 0) {
+        const { data: commentData } = await supabase
+          .from('comments')
+          .select('post_id')
+          .in('post_id', ids);
+        const counts: Record<string, number> = {};
+        (commentData ?? []).forEach((c: { post_id: string }) => {
+          counts[c.post_id] = (counts[c.post_id] ?? 0) + 1;
+        });
+        setCommentCounts(counts);
+      }
     }
     setLoading(false);
   };
@@ -255,6 +271,28 @@ export function Feed() {
     setCroppedImage(null);
   };
 
+  const handleShare = async (post: FeedPost) => {
+    const shareData = {
+      title: `${post.dog_name}의 이야기`,
+      text: post.content || `${post.dog_name}의 피드를 확인해보세요!`,
+      url: window.location.href,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(shareData.url);
+        alert('링크가 복사되었습니다!');
+      }
+    } catch {
+      // 사용자 취소
+    }
+  };
+
+  const handleOpenComment = (post: FeedPost) => {
+    setCommentPostId(post.id);
+  };
+
   const displayPosts = [...posts, ...(posts.length === 0 ? DUMMY_POSTS : [])];
   const filterStyle = (f: string) => (f !== 'none' ? f : undefined);
 
@@ -288,18 +326,21 @@ export function Feed() {
               <span className="text-[10px] font-bold text-[#715a4a]">내 스토리</span>
             </button>
 
-            {[1, 2, 3].map(i => (
-              <div key={i} className="flex flex-col items-center gap-2 flex-shrink-0">
+            {displayPosts.slice(0, 6).map(post => (
+              <div key={`story-${post.id}`} className="flex flex-col items-center gap-2 flex-shrink-0">
                 <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#f9dac6] to-[#315926] p-0.5 shadow-sm">
                   <div className="w-full h-full rounded-full border-2 border-white overflow-hidden">
                     <img
-                      src={`https://api.dicebear.com/7.x/avataaars/svg?seed=user${i}`}
+                      src={post.image_url}
                       className="w-full h-full object-cover"
-                      alt={`Story ${i}`}
+                      style={{ filter: post.filter && post.filter !== 'none' ? post.filter : undefined }}
+                      alt={post.dog_name}
                     />
                   </div>
                 </div>
-                <span className="text-[10px] font-bold text-[#715a4a]">진도시티_{i}</span>
+                <span className="text-[10px] font-bold text-[#715a4a] max-w-[64px] text-center truncate">
+                  {post.dog_name}
+                </span>
               </div>
             ))}
           </div>
@@ -372,11 +413,16 @@ export function Feed() {
                       />
                       <span className="text-xs font-bold">{post.likes}</span>
                     </button>
-                    <button className="flex items-center gap-1.5 group">
+                    <button
+                      onClick={() => handleOpenComment(post)}
+                      className="flex items-center gap-1.5 group"
+                    >
                       <MessageCircle size={22} className="group-hover:text-blue-400 transition-colors" />
-                      <span className="text-xs font-bold">{post.comments ?? 0}</span>
+                      <span className="text-xs font-bold">
+                        {commentCounts[post.id] ?? post.comments ?? 0}
+                      </span>
                     </button>
-                    <button className="ml-auto">
+                    <button className="ml-auto" onClick={() => handleShare(post)}>
                       <Share2 size={22} className="text-[#715a4a]" />
                     </button>
                   </div>
@@ -421,6 +467,19 @@ export function Feed() {
         className="hidden"
         accept="image/*"
       />
+
+      {/* Comment Sheet */}
+      <AnimatePresence>
+        {commentPostId && (
+          <CommentSheet
+            postId={commentPostId}
+            onClose={() => setCommentPostId(null)}
+            onCountChange={(count) =>
+              setCommentCounts(prev => ({ ...prev, [commentPostId]: count }))
+            }
+          />
+        )}
+      </AnimatePresence>
 
       {/* ===== Create Post Modal ===== */}
       <AnimatePresence>
