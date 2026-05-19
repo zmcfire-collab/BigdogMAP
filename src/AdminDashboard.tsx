@@ -89,53 +89,95 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   const [isAddingPlace, setIsAddingPlace] = useState(false);
   const [newPlace, setNewPlace] = useState({ name: '', category: 'Cafe', lat: 37.5665, lng: 126.9780 });
-  const [gmapsUrl, setGmapsUrl] = useState('');
-  const [gmapsParsing, setGmapsParsing] = useState(false);
-  const [gmapsError, setGmapsError] = useState('');
+  const [mapUrl, setMapUrl] = useState('');
+  const [mapParsing, setMapParsing] = useState(false);
+  const [mapError, setMapError] = useState('');
 
-  const parseGoogleMapsUrl = async (url: string) => {
-    setGmapsParsing(true);
-    setGmapsError('');
+  // Web Mercator → WGS84 변환 (네이버 지도 c= 파라미터)
+  const mercatorToWgs84 = (x: number, y: number) => ({
+    lat: Math.atan(Math.sinh(y / 6378137)) * 180 / Math.PI,
+    lng: x * 180 / 20037508.342789244,
+  });
+
+  const resolveShortUrl = async (url: string, pattern: RegExp): Promise<string | null> => {
     try {
-      let resolvedUrl = url.trim();
+      const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+      const data = await res.json();
+      const match = (data.contents as string)?.match(pattern);
+      return match ? match[0] : null;
+    } catch {
+      return null;
+    }
+  };
 
-      // 단축 URL 처리 (maps.app.goo.gl, goo.gl/maps)
-      if (resolvedUrl.includes('maps.app.goo.gl') || resolvedUrl.includes('goo.gl/maps')) {
-        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(resolvedUrl)}`);
-        const data = await res.json();
-        const match = (data.contents as string)?.match(/https:\/\/www\.google\.com\/maps\/[^"' ]+/);
-        if (match) resolvedUrl = match[0];
-        else {
-          setGmapsError('단축 링크 해석 실패. 구글 지도 앱 → 공유 → 링크 복사(전체 URL)를 사용해주세요.');
-          return;
+  const parseMapUrl = async (url: string) => {
+    setMapParsing(true);
+    setMapError('');
+    try {
+      let resolved = url.trim();
+      let lat = 0, lng = 0, name = '';
+
+      /* ── 구글 지도 ── */
+      if (resolved.includes('google.com/maps') || resolved.includes('maps.app.goo.gl') || resolved.includes('goo.gl/maps')) {
+        if (resolved.includes('maps.app.goo.gl') || resolved.includes('goo.gl/maps')) {
+          const full = await resolveShortUrl(resolved, /https:\/\/www\.google\.com\/maps\/[^"' ]+/);
+          if (!full) { setMapError('구글 단축 링크 해석 실패. 전체 URL을 사용해주세요.'); return; }
+          resolved = full;
         }
-      }
+        const coord = resolved.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) ?? resolved.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+        if (!coord) { setMapError('구글 지도 링크에서 좌표를 찾을 수 없습니다.'); return; }
+        lat = parseFloat(coord[1]);
+        lng = parseFloat(coord[2]);
+        const nm = resolved.match(/\/place\/([^/@?&]+)/);
+        name = nm ? decodeURIComponent(nm[1].replace(/\+/g, ' ')).replace(/\/$/, '') : '';
 
-      // 좌표 추출: /@lat,lng
-      const coordMatch = resolvedUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-      // q=lat,lng 형식
-      const qMatch = resolvedUrl.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
-      const coords = coordMatch ?? qMatch;
-      if (!coords) {
-        setGmapsError('좌표를 찾을 수 없습니다. 구글 지도에서 장소를 선택 후 공유한 링크를 붙여넣어주세요.');
+      /* ── 네이버 지도 ── */
+      } else if (resolved.includes('naver.me') || resolved.includes('map.naver.com') || resolved.includes('m.map.naver.com')) {
+        if (resolved.includes('naver.me')) {
+          const full = await resolveShortUrl(resolved, /https:\/\/(?:m\.)?map\.naver\.com\/[^"' ]+/);
+          if (!full) { setMapError('네이버 단축 링크 해석 실패. 전체 URL을 사용해주세요.'); return; }
+          resolved = full;
+        }
+
+        // coX=경도&coY=위도 (WGS84 직접)
+        const coX = resolved.match(/[?&]coX=([\d.]+)/);
+        const coY = resolved.match(/[?&]coY=([\d.]+)/);
+        if (coX && coY) {
+          lng = parseFloat(coX[1]);
+          lat = parseFloat(coY[1]);
+        } else {
+          // c=X,Y,... 파라미터
+          const cParam = resolved.match(/[?&]c=([-\d.]+),([-\d.]+)/);
+          if (!cParam) { setMapError('네이버 지도 링크에서 좌표를 찾을 수 없습니다.'); return; }
+          const x = parseFloat(cParam[1]);
+          const y = parseFloat(cParam[2]);
+          // WGS84 범위면 그대로, 아니면 Web Mercator 변환
+          if (x > 120 && x < 132 && y > 33 && y < 39) {
+            lng = x; lat = y;
+          } else {
+            const wgs = mercatorToWgs84(x, y);
+            lat = wgs.lat; lng = wgs.lng;
+          }
+        }
+
+        // 장소명: /search/NAME 또는 query= 파라미터
+        const nmPath = resolved.match(/\/search\/([^/?&]+)/);
+        const nmQuery = resolved.match(/[?&]query=([^&]+)/);
+        name = nmPath
+          ? decodeURIComponent(nmPath[1])
+          : nmQuery ? decodeURIComponent(nmQuery[1]) : '';
+
+      } else {
+        setMapError('구글 지도 또는 네이버 지도 링크를 붙여넣어주세요.');
         return;
       }
 
-      const lat = parseFloat(coords[1]);
-      const lng = parseFloat(coords[2]);
-
-      // 장소명 추출: /place/NAME/
-      const placeMatch = resolvedUrl.match(/\/place\/([^/@?&]+)/);
-      const name = placeMatch
-        ? decodeURIComponent(placeMatch[1].replace(/\+/g, ' ')).replace(/\/$/, '').replace(/\+/g, ' ')
-        : '';
-
       setNewPlace(prev => ({ ...prev, name: name || prev.name, lat, lng }));
-      setGmapsUrl('');
+      setMapUrl('');
     } catch {
-      setGmapsError('링크 파싱 중 오류가 발생했습니다.');
+      setMapError('링크 파싱 중 오류가 발생했습니다.');
     } finally {
-      setGmapsParsing(false);
+      setMapParsing(false);
     }
   };
 
@@ -198,26 +240,26 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
             {isAddingPlace && (
               <form onSubmit={handleAddPlace} style={{ background: 'white', padding: '20px', borderRadius: '12px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                {/* 구글 지도 링크 파싱 */}
+                {/* 지도 링크 파싱 */}
                 <div style={{ marginBottom: '16px', padding: '14px', background: '#F0F7FF', borderRadius: '8px', border: '1px solid #C7DFFF' }}>
-                  <p style={{ fontSize: '12px', fontWeight: 800, color: '#1A73E8', marginBottom: '8px' }}>🗺 구글 지도 링크로 자동 입력</p>
+                  <p style={{ fontSize: '12px', fontWeight: 800, color: '#1A73E8', marginBottom: '8px' }}>🗺 지도 링크로 자동 입력 (구글 지도 · 네이버 지도)</p>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input
-                      placeholder="구글 지도 공유 링크 붙여넣기 (maps.app.goo.gl 또는 전체 URL)"
-                      value={gmapsUrl}
-                      onChange={e => { setGmapsUrl(e.target.value); setGmapsError(''); }}
+                      placeholder="구글/네이버 지도 공유 링크 붙여넣기"
+                      value={mapUrl}
+                      onChange={e => { setMapUrl(e.target.value); setMapError(''); }}
                       style={{ flex: 1, padding: '10px', border: '1px solid #C7DFFF', borderRadius: '6px', fontSize: '13px' }}
                     />
                     <button
                       type="button"
-                      onClick={() => parseGoogleMapsUrl(gmapsUrl)}
-                      disabled={!gmapsUrl.trim() || gmapsParsing}
-                      style={{ padding: '10px 16px', background: '#1A73E8', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap', opacity: !gmapsUrl.trim() || gmapsParsing ? 0.5 : 1 }}
+                      onClick={() => parseMapUrl(mapUrl)}
+                      disabled={!mapUrl.trim() || mapParsing}
+                      style={{ padding: '10px 16px', background: '#1A73E8', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap', opacity: !mapUrl.trim() || mapParsing ? 0.5 : 1 }}
                     >
-                      {gmapsParsing ? '파싱 중...' : '가져오기'}
+                      {mapParsing ? '파싱 중...' : '가져오기'}
                     </button>
                   </div>
-                  {gmapsError && <p style={{ marginTop: '8px', fontSize: '12px', color: '#C62828' }}>{gmapsError}</p>}
+                  {mapError && <p style={{ marginTop: '8px', fontSize: '12px', color: '#C62828' }}>{mapError}</p>}
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
