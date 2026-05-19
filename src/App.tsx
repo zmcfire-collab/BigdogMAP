@@ -134,7 +134,7 @@ export default function App() {
         });
 
         // 지도 클릭 이벤트 — 제보 위치 선택
-        window.naver.maps.Event.addListener(naverMapRef.current, 'click', (e: naver.maps.MapMouseEvent) => {
+        window.naver.maps.Event.addListener(naverMapRef.current, 'click', (e: any) => {
           const lat = e.coord.lat();
           const lng = e.coord.lng();
           setClickedLocation({ lat, lng });
