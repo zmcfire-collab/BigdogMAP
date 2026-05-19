@@ -189,7 +189,7 @@ export function AIGrowthCare() {
               className="w-16 h-16 bg-[#315926]/10 rounded-[28px] flex items-center justify-center">
               <PawPrint size={32} className="text-[#315926]" />
             </motion.div>
-            <h2 className="text-3xl font-serif text-[#543013]">반려견 등록</h2>
+            <h2 className="text-3xl font-sans text-[#543013]">반려견 등록</h2>
             <p className="text-sm text-[#715a4a]">AI 성장 케어를 시작하려면 반려견 정보를 입력해주세요.</p>
           </header>
 
@@ -261,7 +261,7 @@ export function AIGrowthCare() {
         <section className="flex justify-between items-start">
           <div className="space-y-1">
             <motion.h1 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-              className="text-3xl font-serif text-[#543013] leading-tight">
+              className="text-3xl font-sans text-[#543013] leading-tight">
               {pet.name}의 성장일지
             </motion.h1>
             <p className="text-xs text-[#715a4a] font-bold tracking-tight uppercase">
@@ -295,7 +295,7 @@ export function AIGrowthCare() {
               <p className="text-sm text-[#715a4a] leading-relaxed whitespace-pre-line">{aiAnalysis}</p>
             ) : (
               <div className="space-y-2">
-                <h3 className="text-xl font-serif text-[#543013]">{calcAge(pet.birth_date)}</h3>
+                <h3 className="text-xl font-sans text-[#543013]">{calcAge(pet.birth_date)}</h3>
                 <p className="text-sm text-[#715a4a] leading-relaxed">
                   {weightLogs.length > 0
                     ? `총 ${weightLogs.length}회 체중이 기록되었습니다. AI 분석 버튼을 눌러 맞춤 케어 가이드를 받아보세요.`
@@ -314,11 +314,11 @@ export function AIGrowthCare() {
               <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[#f0ede9]">
                 <div>
                   <p className="text-[10px] text-[#715a4a] font-bold uppercase tracking-widest opacity-60">현재 체중</p>
-                  <p className="text-2xl font-serif text-[#543013]">{latestWeight}<span className="text-sm ml-1">kg</span></p>
+                  <p className="text-2xl font-sans text-[#543013]">{latestWeight}<span className="text-sm ml-1">kg</span></p>
                 </div>
                 <div>
                   <p className="text-[10px] text-[#715a4a] font-bold uppercase tracking-widest opacity-60">기록 횟수</p>
-                  <p className="text-2xl font-serif text-[#315926]">{weightLogs.length}<span className="text-sm ml-1">회</span></p>
+                  <p className="text-2xl font-sans text-[#315926]">{weightLogs.length}<span className="text-sm ml-1">회</span></p>
                 </div>
               </div>
             )}
@@ -424,7 +424,7 @@ export function AIGrowthCare() {
               </div>
               <div className="space-y-1">
                 <p className="text-[10px] text-[#715a4a] font-bold uppercase tracking-widest">Diet Target</p>
-                <h4 className="text-2xl font-serif text-[#543013]">{kcal}<span className="text-sm ml-1">kcal</span></h4>
+                <h4 className="text-2xl font-sans text-[#543013]">{kcal}<span className="text-sm ml-1">kcal</span></h4>
                 <p className="text-[10px] text-[#715a4a] font-medium leading-tight">
                   {latestWeight ? `사료 ${(Number(latestWeight) * 22).toFixed(0)}g 내외` : '체중 기록 후 계산'}<br />하루 2회 급여 권장
                 </p>
@@ -438,7 +438,7 @@ export function AIGrowthCare() {
               </div>
               <div className="space-y-2">
                 <p className="text-[10px] text-[#715a4a] font-bold uppercase tracking-widest">Hydration</p>
-                <p className="text-2xl font-serif text-[#543013]">{waterMl}<span className="text-[10px] font-bold text-[#715a4a] ml-1">ml/day</span></p>
+                <p className="text-2xl font-sans text-[#543013]">{waterMl}<span className="text-[10px] font-bold text-[#715a4a] ml-1">ml/day</span></p>
                 <p className="text-[10px] text-[#715a4a]">{latestWeight ? `체중 × 60ml` : '체중 기록 후 계산'}</p>
               </div>
             </motion.div>
@@ -453,7 +453,7 @@ export function AIGrowthCare() {
                 <span className="text-[10px] text-[#715a4a] font-bold uppercase tracking-widest">Bowl Height</span>
               </div>
               <div>
-                <p className="text-xl font-serif text-[#543013]">{bowlHeight}cm</p>
+                <p className="text-xl font-sans text-[#543013]">{bowlHeight}cm</p>
                 <p className="text-[10px] text-[#715a4a] leading-tight mt-1">척추 정렬 최적 높이</p>
               </div>
             </motion.div>
@@ -466,7 +466,7 @@ export function AIGrowthCare() {
                 <span className="text-[10px] text-[#715a4a] font-bold uppercase tracking-widest">Records</span>
               </div>
               <div>
-                <p className="text-xl font-serif text-[#543013]">{weightLogs.length > 0 ? `${weightLogs.length}회 ✓` : '미기록'}</p>
+                <p className="text-xl font-sans text-[#543013]">{weightLogs.length > 0 ? `${weightLogs.length}회 ✓` : '미기록'}</p>
                 <p className="text-[10px] text-[#715a4a] leading-tight mt-1">월 1회 이상 체중 기록 권장</p>
               </div>
             </motion.div>
@@ -484,7 +484,7 @@ export function AIGrowthCare() {
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Current Rank</p>
-                  <h4 className="font-serif text-xl">{rankNames[rankIdx]}</h4>
+                  <h4 className="font-sans text-xl">{rankNames[rankIdx]}</h4>
                 </div>
               </div>
               <ChevronRight size={20} className="opacity-30 group-hover:opacity-100 transition-opacity" />

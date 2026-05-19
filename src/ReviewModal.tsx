@@ -84,7 +84,7 @@ export function ReviewModal({ place, onClose }: ReviewModalProps) {
         className="w-full bg-white rounded-t-[32px] max-h-[80vh] flex flex-col"
       >
         <div className="flex items-center justify-between p-6 border-b border-[#ebe8e3]">
-          <h3 className="text-xl font-serif text-[#543013]">{place.name} 리뷰</h3>
+          <h3 className="text-xl font-sans text-[#543013]">{place.name} 리뷰</h3>
           <button onClick={onClose} className="p-2 rounded-full bg-[#f0ede9] text-[#715a4a]">
             <X size={20} />
           </button>

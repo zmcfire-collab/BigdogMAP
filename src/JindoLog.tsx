@@ -515,7 +515,7 @@ export function JindoLog() {
                       </div>
                    </div>
                    <div className="p-6 space-y-2">
-                      <h4 className="text-lg font-serif text-[#543013]">{entry.title || "제목 없는 기록"}</h4>
+                      <h4 className="text-lg font-sans text-[#543013]">{entry.title || "제목 없는 기록"}</h4>
                       <p className="text-sm text-[#715a4a] line-clamp-2 leading-relaxed">{entry.content || "기록된 내용이 없습니다."}</p>
                       <div className="flex gap-2 pt-2">
                         {entry.hotspots.length > 0 && (

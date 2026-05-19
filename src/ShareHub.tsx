@@ -45,7 +45,7 @@ export function ShareHub() {
       <section className="bg-white rounded-[32px] p-8 border border-[#ebe8e3] shadow-sm space-y-6">
         <div className="flex justify-between items-start">
           <div className="space-y-1">
-             <h3 className="text-xl font-serif text-[#543013]">멀티 채널 공유</h3>
+             <h3 className="text-xl font-sans text-[#543013]">멀티 채널 공유</h3>
              <p className="text-xs text-[#715a4a] leading-relaxed">한 번의 기록으로 모든 소셜 채널에<br/>우리 아이의 일상을 공유하세요.</p>
           </div>
           <div className="w-12 h-12 bg-[#315926]/10 rounded-2xl flex items-center justify-center text-[#315926]">

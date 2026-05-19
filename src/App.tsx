@@ -313,7 +313,7 @@ export default function App() {
           <div className="page-content px-6 py-8">
             <div className="max-w-md mx-auto space-y-8">
               <header className="space-y-2">
-                <h2 className="text-3xl font-serif text-[#543013]">환영합니다!</h2>
+                <h2 className="text-3xl font-sans text-[#543013]">환영합니다!</h2>
                 <p className="text-sm text-[#715a4a]">로그인하여 나만의 산책 로그와<br />반려견 성장 카드를 관리해보세요.</p>
               </header>
               <div className="space-y-3">
@@ -348,7 +348,7 @@ export default function App() {
                     : <User size={40} />}
                 </div>
                 <div>
-                  <h3 className="text-2xl font-serif text-[#543013]">{userSession.user?.user_metadata?.full_name || '보호자님'}</h3>
+                  <h3 className="text-2xl font-sans text-[#543013]">{userSession.user?.user_metadata?.full_name || '보호자님'}</h3>
                   <span className="text-[10px] font-black text-[#315926] bg-[#315926]/10 px-2 py-0.5 rounded-full uppercase tracking-widest">Premium Guardian</span>
                 </div>
               </div>
@@ -368,7 +368,7 @@ export default function App() {
                 { label: '리워드', count: profileStats.rewards >= 1000 ? `${(profileStats.rewards / 1000).toFixed(1)}k` : profileStats.rewards },
               ].map((s, i) => (
                 <div key={i} className="bg-white p-5 rounded-[28px] border border-[#ebe8e3] text-center">
-                  <p className="text-2xl font-serif text-[#543013]">{s.count}</p>
+                  <p className="text-2xl font-sans text-[#543013]">{s.count}</p>
                   <p className="text-[9px] font-black text-[#715a4a] uppercase tracking-widest mt-1 opacity-60">{s.label}</p>
                 </div>
               ))}
@@ -449,7 +449,7 @@ export default function App() {
                 <div className="pb-8">
                   <div className="flex justify-between items-start mb-5">
                     <div className="space-y-1">
-                      <h2 className="text-2xl font-serif text-[#543013]">{selectedPlace.name}</h2>
+                      <h2 className="text-2xl font-sans text-[#543013]">{selectedPlace.name}</h2>
                       <div className="flex items-center gap-1.5 text-[#315926] font-black text-[10px] uppercase tracking-widest">
                         <Leaf size={12} fill="currentColor" /> Jindo-Friendly
                       </div>
@@ -533,7 +533,7 @@ export default function App() {
         <div className="page-content px-6 py-8">
           <div className="max-w-md mx-auto space-y-6">
             <header>
-              <h2 className="text-3xl font-serif text-[#543013]">{hubMode === 'names' ? 'AI 이름 천재' : '공유 허브'}</h2>
+              <h2 className="text-3xl font-sans text-[#543013]">{hubMode === 'names' ? 'AI 이름 천재' : '공유 허브'}</h2>
               <p className="text-xs text-[#715a4a] font-bold uppercase tracking-widest mt-1">
                 {hubMode === 'names' ? 'Name recommendation' : 'Multi-channel share'}
               </p>
