@@ -13,7 +13,7 @@ import { AdminDashboard } from './AdminDashboard';
 import { JindoLog } from './JindoLog';
 import { AIGrowthCare } from './AIGrowthCare';
 import { DogNameGenerator } from './DogNameGenerator';
-import { supabase, signInWithGoogle, signInWithApple, signInWithFacebook } from './supabase';
+import { supabase, signInWithGoogle } from './supabase';
 import { APP_CONFIG } from './config';
 import './index.css';
 
@@ -45,6 +45,29 @@ const MOCK_PLACES: Place[] = []; // DB에서 불러오므로 비워둠
 
 const FILTERS = ['진돗개 환영', '10kg+ 가능', '입마개 미필수', '실외 배변 명당'];
 
+const TAG_ICONS: Record<string, string> = {
+  '진돗개 환영': '🐕',
+  '10kg+ 가능': '🐾',
+  '입마개 필수': '😷',
+  '입마개 미필수': '✅',
+  '실외 배변 명당': '🌿',
+  '식수대': '💧',
+  '잔디밭': '🌱',
+  '그늘 완비': '⛱',
+  '주차 가능': '🚗',
+  '실내 가능': '🏠',
+  '목줄 필수': '🔗',
+};
+
+const CATEGORY_ICON: Record<string, string> = {
+  Park: '🌳',
+  Cafe: '☕',
+  Restaurant: '🍽',
+  Hotel: '🏨',
+  Training: '🎯',
+  Playground: '🎪',
+};
+
 /* ── 메인 컴포넌트 ────────────────────────────── */
 export default function App() {
   const [currentTab, setCurrentTab] = useState<Tab>('Map');
@@ -63,6 +86,7 @@ export default function App() {
   const [profileStats, setProfileStats] = useState({ pins: 0, logs: 0, rewards: 0 });
   const [pinMode, setPinMode] = useState<'GREEN' | 'RED' | null>(null); // 제보 모드
   const [clickedLocation, setClickedLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [reportName, setReportName] = useState('');
   const clickMarkerRef = useRef<naver.maps.Marker | null>(null);
 
   /* 지도 refs */
@@ -165,6 +189,13 @@ export default function App() {
         position: new window.naver.maps.LatLng(place.lat, place.lng),
         map,
         title: place.name,
+        icon: {
+          content: `<div style="background:#305C38;border-radius:12px;padding:6px 10px;display:flex;align-items:center;gap:4px;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.25);color:white;font-size:12px;font-weight:800;white-space:nowrap;">
+  <span>${CATEGORY_ICON[place.category] || '📍'}</span>
+  <span>${place.name.length > 8 ? place.name.slice(0, 8) + '…' : place.name}</span>
+</div>`,
+          anchor: new window.naver.maps.Point(0, 0),
+        },
       });
       window.naver.maps.Event.addListener(marker, 'click', () => setSelectedPlace(place));
       markersRef.current.push(marker);
@@ -253,12 +284,14 @@ export default function App() {
       // 이미 같은 모드 → 취소
       setPinMode(null);
       setClickedLocation(null);
+      setReportName('');
       if (clickMarkerRef.current) { clickMarkerRef.current.setMap(null); clickMarkerRef.current = null; }
       return;
     }
     // 제보 모드 진입 — 지도를 클릭해 위치 선택
     setPinMode(type);
     setClickedLocation(null);
+    setReportName('');
     if (clickMarkerRef.current) { clickMarkerRef.current.setMap(null); clickMarkerRef.current = null; }
   }, [pinMode]);
 
@@ -269,13 +302,15 @@ export default function App() {
       lat: clickedLocation.lat,
       lng: clickedLocation.lng,
       status: 'pending',
+      name: reportName || undefined,
     }]);
     if (error) { alert('제보 중 오류가 발생했습니다.'); return; }
     alert(`${pinMode === 'GREEN' ? '🐾 환영 장소' : '🚫 거부 장소'} 제보가 접수되었습니다.\n관리자 승인 후 지도에 표시됩니다.`);
     setPinMode(null);
     setClickedLocation(null);
+    setReportName('');
     if (clickMarkerRef.current) { clickMarkerRef.current.setMap(null); clickMarkerRef.current = null; }
-  }, [pinMode, clickedLocation]);
+  }, [pinMode, clickedLocation, reportName]);
 
   const toggleFilter = (label: string) =>
     setActiveFilters(prev => prev.includes(label) ? prev.filter(f => f !== label) : [...prev, label]);
@@ -340,21 +375,13 @@ export default function App() {
           <div className="page-content px-6 py-8">
             <div className="max-w-md mx-auto space-y-8">
               <header className="space-y-2">
-                <h2 className="text-3xl font-serif text-[#543013]">환영합니다!</h2>
+                <h2 className="text-3xl font-sans text-[#543013]">환영합니다!</h2>
                 <p className="text-sm text-[#715a4a]">로그인하여 나만의 산책 로그와<br />반려견 성장 카드를 관리해보세요.</p>
               </header>
               <div className="space-y-3">
                 <button onClick={signInWithGoogle} className="w-full h-[56px] bg-white border border-[#ebe8e3] rounded-3xl flex items-center justify-center gap-4 shadow-sm active:scale-95 transition-all">
                   <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="" />
                   <span className="text-sm font-black text-[#543013]">Google로 시작하기</span>
-                </button>
-                <button onClick={signInWithApple} className="w-full h-[56px] bg-black text-white rounded-3xl flex items-center justify-center gap-4 shadow-lg active:scale-95 transition-all">
-                  <svg viewBox="0 0 384 512" width="18" height="18" fill="currentColor"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" /></svg>
-                  <span className="text-sm font-black">Apple로 시작하기</span>
-                </button>
-                <button onClick={signInWithFacebook} className="w-full h-[56px] bg-[#1877F2] text-white rounded-3xl flex items-center justify-center gap-4 shadow-lg active:scale-95 transition-all">
-                  <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
-                  <span className="text-sm font-black">Facebook으로 로그인</span>
                 </button>
               </div>
               <p className="text-center text-[10px] text-[#715a4a] opacity-60 pt-4 border-t border-[#ebe8e3]">
@@ -375,7 +402,7 @@ export default function App() {
                     : <User size={40} />}
                 </div>
                 <div>
-                  <h3 className="text-2xl font-serif text-[#543013]">{userSession.user?.user_metadata?.full_name || '보호자님'}</h3>
+                  <h3 className="text-2xl font-sans text-[#543013]">{userSession.user?.user_metadata?.full_name || '보호자님'}</h3>
                   <span className="text-[10px] font-black text-[#315926] bg-[#315926]/10 px-2 py-0.5 rounded-full uppercase tracking-widest">Premium Guardian</span>
                 </div>
               </div>
@@ -395,7 +422,7 @@ export default function App() {
                 { label: '리워드', count: profileStats.rewards >= 1000 ? `${(profileStats.rewards / 1000).toFixed(1)}k` : profileStats.rewards },
               ].map((s, i) => (
                 <div key={i} className="bg-white p-5 rounded-[28px] border border-[#ebe8e3] text-center">
-                  <p className="text-2xl font-serif text-[#543013]">{s.count}</p>
+                  <p className="text-2xl font-sans text-[#543013]">{s.count}</p>
                   <p className="text-[9px] font-black text-[#715a4a] uppercase tracking-widest mt-1 opacity-60">{s.label}</p>
                 </div>
               ))}
@@ -457,14 +484,30 @@ export default function App() {
             <div className="absolute top-16 left-0 right-0 z-50 flex justify-center px-4">
               <div className={`flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl text-white text-sm font-bold ${pinMode === 'GREEN' ? 'bg-[#305C38]' : 'bg-[#D32F2F]'}`}>
                 <span>{pinMode === 'GREEN' ? '🐾 환영 장소' : '🚫 거부 장소'}</span>
-                <span className="font-normal opacity-90">지도에서 위치를 클릭하세요</span>
+                {!clickedLocation && (
+                  <span className="font-normal opacity-90">지도에서 위치를 클릭하세요</span>
+                )}
+                {clickedLocation && pinMode === 'GREEN' && (
+                  <input
+                    type="text"
+                    value={reportName}
+                    onChange={e => setReportName(e.target.value)}
+                    placeholder="장소 이름 (선택)"
+                    className="bg-white/20 placeholder-white/60 text-white text-xs px-2 py-1 rounded-lg outline-none w-28"
+                  />
+                )}
                 {clickedLocation && (
                   <button onClick={handleSubmitReport}
                     className="ml-2 bg-white/20 hover:bg-white/30 px-3 py-1 rounded-xl text-xs font-black">
                     제보하기
                   </button>
                 )}
-                <button onClick={() => { setPinMode(null); setClickedLocation(null); if (clickMarkerRef.current) { clickMarkerRef.current.setMap(null); clickMarkerRef.current = null; } }}
+                <button onClick={() => {
+                  setPinMode(null);
+                  setClickedLocation(null);
+                  setReportName('');
+                  if (clickMarkerRef.current) { clickMarkerRef.current.setMap(null); clickMarkerRef.current = null; }
+                }}
                   className="ml-1 opacity-70 hover:opacity-100">
                   <X size={16} />
                 </button>
@@ -506,17 +549,31 @@ export default function App() {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3 mb-6">
-                    {[
-                      { icon: <PawPrint size={18} className="text-[#8B5E3C]" />, label: '대형견 가능' },
-                      { icon: <Leaf size={18} className="text-[#315926]" />, label: '잔디밭' },
-                      { icon: <Droplets size={18} className="text-blue-500" />, label: '식수대' },
-                    ].map((f, i) => (
-                      <div key={i} className="flex flex-col items-center gap-1.5 p-3 bg-[#fcf9f4] rounded-2xl border border-[#ebe8e3]">
-                        {f.icon}
-                        <span className="text-[10px] font-bold text-[#715a4a]">{f.label}</span>
+                  {/* 태그 섹션: 동적 태그 표시, 없으면 기본 3개 fallback */}
+                  <div className="mb-6">
+                    {selectedPlace.tags && selectedPlace.tags.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {selectedPlace.tags.map((tag, i) => (
+                          <div key={i} className="flex items-center gap-1.5 px-3 py-2 bg-[#fcf9f4] rounded-2xl border border-[#ebe8e3]">
+                            <span className="text-base">{TAG_ICONS[tag] || '•'}</span>
+                            <span className="text-[11px] font-bold text-[#715a4a]">{tag}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    ) : (
+                      <div className="grid grid-cols-3 gap-3">
+                        {[
+                          { icon: <PawPrint size={18} className="text-[#8B5E3C]" />, label: '대형견 가능' },
+                          { icon: <Leaf size={18} className="text-[#315926]" />, label: '잔디밭' },
+                          { icon: <Droplets size={18} className="text-blue-500" />, label: '식수대' },
+                        ].map((f, i) => (
+                          <div key={i} className="flex flex-col items-center gap-1.5 p-3 bg-[#fcf9f4] rounded-2xl border border-[#ebe8e3]">
+                            {f.icon}
+                            <span className="text-[10px] font-bold text-[#715a4a]">{f.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-3 mb-6">
