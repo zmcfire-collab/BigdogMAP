@@ -89,6 +89,55 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   const [isAddingPlace, setIsAddingPlace] = useState(false);
   const [newPlace, setNewPlace] = useState({ name: '', category: 'Cafe', lat: 37.5665, lng: 126.9780 });
+  const [gmapsUrl, setGmapsUrl] = useState('');
+  const [gmapsParsing, setGmapsParsing] = useState(false);
+  const [gmapsError, setGmapsError] = useState('');
+
+  const parseGoogleMapsUrl = async (url: string) => {
+    setGmapsParsing(true);
+    setGmapsError('');
+    try {
+      let resolvedUrl = url.trim();
+
+      // 단축 URL 처리 (maps.app.goo.gl, goo.gl/maps)
+      if (resolvedUrl.includes('maps.app.goo.gl') || resolvedUrl.includes('goo.gl/maps')) {
+        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(resolvedUrl)}`);
+        const data = await res.json();
+        const match = (data.contents as string)?.match(/https:\/\/www\.google\.com\/maps\/[^"' ]+/);
+        if (match) resolvedUrl = match[0];
+        else {
+          setGmapsError('단축 링크 해석 실패. 구글 지도 앱 → 공유 → 링크 복사(전체 URL)를 사용해주세요.');
+          return;
+        }
+      }
+
+      // 좌표 추출: /@lat,lng
+      const coordMatch = resolvedUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+      // q=lat,lng 형식
+      const qMatch = resolvedUrl.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+      const coords = coordMatch ?? qMatch;
+      if (!coords) {
+        setGmapsError('좌표를 찾을 수 없습니다. 구글 지도에서 장소를 선택 후 공유한 링크를 붙여넣어주세요.');
+        return;
+      }
+
+      const lat = parseFloat(coords[1]);
+      const lng = parseFloat(coords[2]);
+
+      // 장소명 추출: /place/NAME/
+      const placeMatch = resolvedUrl.match(/\/place\/([^/@?&]+)/);
+      const name = placeMatch
+        ? decodeURIComponent(placeMatch[1].replace(/\+/g, ' ')).replace(/\/$/, '').replace(/\+/g, ' ')
+        : '';
+
+      setNewPlace(prev => ({ ...prev, name: name || prev.name, lat, lng }));
+      setGmapsUrl('');
+    } catch {
+      setGmapsError('링크 파싱 중 오류가 발생했습니다.');
+    } finally {
+      setGmapsParsing(false);
+    }
+  };
 
   const handleAddPlace = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,6 +145,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
     if (!error) {
       alert('장소가 성공적으로 추가되었습니다.');
       setIsAddingPlace(false);
+      setNewPlace({ name: '', category: 'Cafe', lat: 37.5665, lng: 126.9780 });
       fetchData();
     } else {
       alert('장소 추가 중 오류 발생: ' + error.message);
@@ -148,6 +198,28 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
             {isAddingPlace && (
               <form onSubmit={handleAddPlace} style={{ background: 'white', padding: '20px', borderRadius: '12px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                {/* 구글 지도 링크 파싱 */}
+                <div style={{ marginBottom: '16px', padding: '14px', background: '#F0F7FF', borderRadius: '8px', border: '1px solid #C7DFFF' }}>
+                  <p style={{ fontSize: '12px', fontWeight: 800, color: '#1A73E8', marginBottom: '8px' }}>🗺 구글 지도 링크로 자동 입력</p>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      placeholder="구글 지도 공유 링크 붙여넣기 (maps.app.goo.gl 또는 전체 URL)"
+                      value={gmapsUrl}
+                      onChange={e => { setGmapsUrl(e.target.value); setGmapsError(''); }}
+                      style={{ flex: 1, padding: '10px', border: '1px solid #C7DFFF', borderRadius: '6px', fontSize: '13px' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => parseGoogleMapsUrl(gmapsUrl)}
+                      disabled={!gmapsUrl.trim() || gmapsParsing}
+                      style={{ padding: '10px 16px', background: '#1A73E8', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap', opacity: !gmapsUrl.trim() || gmapsParsing ? 0.5 : 1 }}
+                    >
+                      {gmapsParsing ? '파싱 중...' : '가져오기'}
+                    </button>
+                  </div>
+                  {gmapsError && <p style={{ marginTop: '8px', fontSize: '12px', color: '#C62828' }}>{gmapsError}</p>}
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <input placeholder="장소명" value={newPlace.name} onChange={e => setNewPlace({...newPlace, name: e.target.value})} style={{ padding: '10px', border: '1px solid #DDD', borderRadius: '6px' }} required />
                   <select value={newPlace.category} onChange={e => setNewPlace({...newPlace, category: e.target.value})} style={{ padding: '10px', border: '1px solid #DDD', borderRadius: '6px' }}>
