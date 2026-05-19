@@ -1,165 +1,212 @@
-@import url('https://cdn.rawgit.com/moonspam/NanumSquare/master/nanumsquare.css');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── CSS 변수 ─────────────────────────────────── */
 :root {
-  --primary-brand: #8B5E3C;
-  --primary-brand-soft: #A67B5B;
-  --secondary-brand: #305C38;
-  --secondary-brand-soft: #4C6B4F;
-  --background-cream: #FBF8F3;
-  --text-dark: #2D2D2D;
-  --text-muted: #6B6B6B;
-  --white: #FFFFFF;
-  --glass: rgba(255, 255, 255, 0.7);
-  --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
-  --border-radius-xl: 24px;
+  --primary: #543013;
+  --primary-soft: #8B5E3C;
+  --secondary: #305C38;
+  --secondary-soft: #4C7E3D;
+  --bg: #fcf9f4;
+  --surface: #ffffff;
+  --border: #ebe8e3;
+  --text: #2D2D2D;
+  --text-muted: #715a4a;
+
+  /* 레이아웃 */
+  --header-h: 56px;
+  --nav-h: 72px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
 }
 
-* {
+/* ── 리셋 ─────────────────────────────────────── */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
   -webkit-tap-highlight-color: transparent;
 }
 
+/* ── 베이스 ───────────────────────────────────── */
+html,
+body,
+#root {
+  height: 100%;
+  height: 100dvh;
+  /* dynamic viewport height — iOS Safari 주소창 대응 */
+}
+
 body {
-  font-family: 'NanumSquare', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background-color: var(--background-cream);
-  color: var(--text-dark);
+  font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
   line-height: 1.5;
   overflow-x: hidden;
   user-select: none;
+  -webkit-font-smoothing: antialiased;
 }
 
 #root {
-  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-/* General Layouts */
+/* ── 앱 헤더 ──────────────────────────────────── */
 .app-header {
-  height: 60px;
-  background: var(--white);
+  height: var(--header-h);
+  flex-shrink: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  z-index: 1000;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
+  padding-top: env(safe-area-inset-top, 0px);
+  z-index: 100;
 }
 
+/* ── 콘텐츠 영역 ──────────────────────────────── */
+.page-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* 하단 네비에 가리지 않도록 패딩 */
+  padding-bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── 지도 컨테이너 ────────────────────────────── */
 .map-container {
   flex: 1;
   position: relative;
+  overflow: hidden;
 }
 
+/* 네이버 지도가 부모 height를 100%로 요구함 */
+#naver-map {
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  background: #e8e4de;
+}
+
+.map-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+/* ── 하단 네비 ────────────────────────────────── */
 .bottom-nav {
-  height: 80px;
-  background: var(--white);
+  flex-shrink: 0;
+  height: calc(var(--nav-h) + var(--safe-b));
+  padding-bottom: var(--safe-b);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-around;
   align-items: center;
-  padding-bottom: 10px;
-  box-shadow: 0 -2px 10px rgba(0,0,0,0.03);
-  z-index: 1000;
+  z-index: 100;
 }
 
 .nav-item {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  font-size: 11px;
-  gap: 4px;
-  color: var(--text-muted);
+  justify-content: center;
+  gap: 3px;
+  color: #aaa;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 8px 4px;
+  transition: color 0.15s;
+  letter-spacing: 0.02em;
 }
 
 .nav-item.active {
-  color: var(--primary-brand);
-  font-weight: 800;
+  color: var(--primary);
+  /* 브랜드 갈색 — 파란색 아님 */
 }
 
-/* Filter Chips */
-.filter-container {
+/* ── 지도 필터 칩 ─────────────────────────────── */
+.filter-bar {
   position: absolute;
-  top: 16px;
+  top: 12px;
   left: 0;
-  width: 100%;
-  overflow-x: auto;
-  white-space: nowrap;
-  padding: 0 16px;
+  right: 0;
+  z-index: 50;
   display: flex;
   gap: 8px;
-  z-index: 500;
+  padding: 0 16px;
+  overflow-x: auto;
   scrollbar-width: none;
+  white-space: nowrap;
 }
-.filter-container::-webkit-scrollbar { display: none; }
+
+.filter-bar::-webkit-scrollbar {
+  display: none;
+}
 
 .chip {
-  padding: 8px 16px;
-  background: var(--white);
+  flex-shrink: 0;
+  padding: 8px 14px;
+  background: var(--surface);
   border-radius: 20px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid rgba(0,0,0,0.05);
-  display: flex;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  display: inline-flex;
   align-items: center;
   gap: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text-muted);
 }
 
 .chip.active {
-  background: var(--primary-brand);
-  color: var(--white);
-  border-color: var(--primary-brand);
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
 }
 
-/* Glass Card / Bottom Sheet */
+/* ── 바텀시트 ─────────────────────────────────── */
 .bottom-sheet {
   position: absolute;
   bottom: 0;
   left: 0;
-  width: 100%;
-  background: var(--white);
-  border-top-left-radius: var(--border-radius-xl);
-  border-top-right-radius: var(--border-radius-xl);
-  padding: 24px;
-  box-shadow: 0 -8px 24px rgba(0,0,0,0.1);
-  transform: translateY(10%); /* Peek state, expands on pull/interact */
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 900;
+  right: 0;
+  background: var(--surface);
+  border-radius: 24px 24px 0 0;
+  padding: 20px 20px 0;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.08);
+  z-index: 90;
+  max-height: 75%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .handle {
-  width: 40px;
+  width: 36px;
   height: 4px;
-  background: rgba(0,0,0,0.1);
+  background: rgba(0, 0, 0, 0.08);
   border-radius: 2px;
-  margin: -12px auto 16px;
+  margin: -8px auto 16px;
+  cursor: pointer;
 }
-
-/* Reviews */
-.review-card {
-  background: #F4F2EE;
-  padding: 16px;
-  border-radius: 16px;
-  margin-top: 12px;
-}
-
-.review-user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.user-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: #DDD;
-  object-fit: cover;
-}
-
-.user-info .name { font-weight: 700; font-size: 14px; }
-.user-info .meta { font-size: 11px; color: var(--text-muted); }

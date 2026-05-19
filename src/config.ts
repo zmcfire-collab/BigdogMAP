@@ -1,9 +1,9 @@
-// Application Configuration
+// 모든 설정값은 .env 파일에서 읽어옵니다.
+// 절대로 이 파일에 직접 값을 입력하지 마세요.
 export const APP_CONFIG = {
   ADMIN: {
-    ID: 'admin',
-    PW: '1111'
+    ID: import.meta.env.VITE_ADMIN_ID as string,
+    PW: import.meta.env.VITE_ADMIN_PW as string,
   },
-  // Gemini API 키: https://aistudio.google.com/app/apikey 에서 발급
-  GEMINI_API_KEY: 'AIzaSyAZvFsLE0TJZgkNapM6iZx12w2S9cfuvbE',
-};
+  GEMINI_API_KEY: import.meta.env.VITE_GEMINI_API_KEY as string,
+} as const;

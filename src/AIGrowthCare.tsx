@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { supabase } from './supabase';
-import { APP_CONFIG } from './config';
+
 
 interface PetProfile {
   id: string;
@@ -133,7 +133,7 @@ export function AIGrowthCare() {
 
   const handleAiAnalysis = async () => {
     if (!pet) return;
-    const apiKey = APP_CONFIG.GEMINI_API_KEY;
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
       setAiAnalysis('Gemini API 키가 설정되지 않았습니다.\nsrc/config.ts의 GEMINI_API_KEY를 입력해주세요.\n(발급: https://aistudio.google.com/app/apikey)');
       return;

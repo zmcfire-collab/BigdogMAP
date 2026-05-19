@@ -1,27 +1,9 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Map as MapIcon,
-  LayoutGrid,
-  Users,
-  User,
-  Bell,
-  Search,
-  PawPrint,
-  Leaf,
-  Droplets,
-  Edit3,
-  X,
-  ShieldAlert,
-  Navigation,
-  Heart,
-  Sparkles,
-  Share2,
-  ChevronRight,
-  Plus,
-  Settings,
-  ShieldCheck,
-  Star
+  Map as MapIcon, LayoutGrid, Users, User, Bell, Search,
+  PawPrint, Leaf, Droplets, Edit3, X, ShieldAlert, Navigation,
+  Heart, Sparkles, Plus, Settings, ShieldCheck, Star, ChevronRight,
 } from 'lucide-react';
 import { ReviewModal } from './ReviewModal';
 import { cn } from './lib/utils';
@@ -33,15 +15,11 @@ import { AIGrowthCare } from './AIGrowthCare';
 import { DogNameGenerator } from './DogNameGenerator';
 import { supabase, signInWithGoogle, signInWithApple, signInWithFacebook } from './supabase';
 import { APP_CONFIG } from './config';
-import './App.css';
+import './index.css';
 
-declare global {
-  interface Window {
-    naver: typeof naver;
-  }
-}
+/* ── 타입 ─────────────────────────────────────── */
+declare global { interface Window { naver: typeof naver } }
 
-// --- Types ---
 interface Place {
   id: string;
   name: string;
@@ -60,41 +38,33 @@ interface Pin {
   status?: 'pending' | 'approved' | 'rejected';
 }
 
+type Tab = 'Map' | 'Feed' | 'Growth' | 'AICare' | 'Hub' | 'Profile' | 'Admin';
+
+/* ── 상수 ─────────────────────────────────────── */
 const MOCK_PLACES: Place[] = [
   {
-    id: '1',
+    id: 'mock-1',
     name: '반포 한강 공원',
     category: 'Park',
     isJindoCertified: true,
     tags: ['대형견 가능', '넓은 잔디밭', '식수대 완비'],
     lat: 37.5100,
-    lng: 126.9950
-  }
+    lng: 126.9950,
+  },
 ];
 
-function MainContent() {
-  const [currentTab, setCurrentTab] = useState<'Map' | 'Feed' | 'Growth' | 'AICare' | 'Hub' | 'Profile' | 'Admin'>('Map');
+const FILTERS = ['진돗개 환영', '10kg+ 가능', '입마개 미필수', '실외 배변 명당'];
+
+/* ── 메인 컴포넌트 ────────────────────────────── */
+export default function App() {
+  const [currentTab, setCurrentTab] = useState<Tab>('Map');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [adminCreds, setAdminCreds] = useState({ id: '', pw: '' });
   const [userSession, setUserSession] = useState<any>(null);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUserSession(session);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
   const [places, setPlaces] = useState<Place[]>(MOCK_PLACES);
-  const [selectedPlace, setSelectedPlace] = useState<Place | null>(MOCK_PLACES[0]);
-  const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
+  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [activeFilters, setActiveFilters] = useState<string[]>(['진돗개 환영']);
   const [reports, setReports] = useState<Pin[]>([]);
   const [hubMode, setHubMode] = useState<'names' | 'share'>('names');
@@ -102,88 +72,163 @@ function MainContent() {
   const [placeReviews, setPlaceReviews] = useState<any[]>([]);
   const [profileStats, setProfileStats] = useState({ pins: 0, logs: 0, rewards: 0 });
 
+  /* 지도 refs */
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const naverMapRef = useRef<naver.maps.Map | null>(null);
+  const markersRef = useRef<naver.maps.Marker[]>([]);
+
+  /* ── Auth ─────────────────────────────────── */
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => setUserSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => setUserSession(session));
+    return () => subscription.unsubscribe();
+  }, []);
+
+  /* ── GPS ──────────────────────────────────── */
+  useEffect(() => {
+    if (!('geolocation' in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const loc = { lat: coords.latitude, lng: coords.longitude };
+        setUserLocation(loc);
+        naverMapRef.current?.setCenter(new window.naver.maps.LatLng(loc.lat, loc.lng));
+      },
+      () => { /* 권한 거부 시 기본값(서울) 유지 */ }
+    );
+  }, []);
+
+  /* ── 네이버 지도 초기화 (재시도 로직 포함) ── */
+  useEffect(() => {
+    if (currentTab !== 'Map') return;
+    if (naverMapRef.current) return;
+
+    const initMap = () => {
+      if (!mapContainerRef.current) return false;
+      if (!window.naver?.maps) return false;
+      try {
+        const center = userLocation
+          ? new window.naver.maps.LatLng(userLocation.lat, userLocation.lng)
+          : new window.naver.maps.LatLng(37.5100, 126.9950);
+        naverMapRef.current = new window.naver.maps.Map(mapContainerRef.current, {
+          center,
+          zoom: 15,
+          mapDataControl: false,
+          scaleControl: false,
+        });
+        return true;
+      } catch (err) {
+        console.error('[지도 초기화 오류]', err);
+        return false;
+      }
+    };
+
+    if (!initMap()) {
+      let attempts = 0;
+      const timer = setInterval(() => {
+        attempts++;
+        if (initMap() || attempts >= 30) clearInterval(timer);
+      }, 100);
+      return () => clearInterval(timer);
+    }
+  }, [currentTab, userLocation]);
+
+  /* ── 마커 동기화 ──────────────────────────── */
   const filteredPlaces = useMemo(() => {
     if (activeFilters.length === 0) return places;
-    return places.filter(place =>
-      activeFilters.some(filter => {
-        if (filter === '진돗개 환영') return place.isJindoCertified;
-        return place.tags.some(tag => tag.includes(filter) || filter.includes(tag));
+    return places.filter(p =>
+      activeFilters.some(f => {
+        if (f === '진돗개 환영') return p.isJindoCertified;
+        return p.tags.some(t => t.includes(f) || f.includes(t));
       })
     );
   }, [places, activeFilters]);
 
-  // Map Refs
-  const mapRef = useRef<HTMLDivElement>(null);
-  const naverMapInstance = useRef<naver.maps.Map | null>(null);
-  const markersRef = useRef<naver.maps.Marker[]>([]);
-
-  // --- Map Initialization ---
   useEffect(() => {
-    if (currentTab === 'Map' && mapRef.current) {
-      if (window.naver && window.naver.maps) {
-        try {
-          const mapOptions = {
-            center: new window.naver.maps.LatLng(37.5100, 126.9950),
-            zoom: 15,
-            mapDataControl: false,
-          };
-          const map = new window.naver.maps.Map(mapRef.current, mapOptions);
-          naverMapInstance.current = map;
+    const map = naverMapRef.current;
+    if (!map || !window.naver?.maps) return;
 
-          // Update Center when location is available
-          if (userLocation) {
-            map.setCenter(new window.naver.maps.LatLng(userLocation.lat, userLocation.lng));
-          }
-        } catch (err) {
-          console.error("Naver Map Init Error:", err);
-        }
-      } else {
-        console.warn("Naver Maps library not ready or auth failed.");
-      }
-    }
-  }, [currentTab, userLocation]);
+    markersRef.current.forEach(m => m.setMap(null));
+    markersRef.current = [];
 
-  // Sync Markers
-  useEffect(() => {
-    if (!naverMapInstance.current || !window.naver?.maps) return;
-
-    try {
-      // Clear existing markers
-      markersRef.current.forEach(m => m.setMap(null));
-      markersRef.current = [];
-
-      // Add Places (필터 적용)
-      filteredPlaces.forEach(place => {
-        const marker = new window.naver.maps.Marker({
-          position: new window.naver.maps.LatLng(place.lat, place.lng),
-          map: naverMapInstance.current,
-          title: place.name
-        });
-        window.naver.maps.Event.addListener(marker, 'click', () => setSelectedPlace(place));
-        markersRef.current.push(marker);
+    filteredPlaces.forEach(place => {
+      const marker = new window.naver.maps.Marker({
+        position: new window.naver.maps.LatLng(place.lat, place.lng),
+        map,
+        title: place.name,
       });
+      window.naver.maps.Event.addListener(marker, 'click', () => setSelectedPlace(place));
+      markersRef.current.push(marker);
+    });
 
-      // Add Reports
-      reports.forEach(report => {
-        const marker = new window.naver.maps.Marker({
-          position: new window.naver.maps.LatLng(report.lat, report.lng),
-          map: naverMapInstance.current,
-          icon: {
-              content: `<div style="background: ${report.type === 'GREEN' ? '#305C38' : '#D32F2F'}; border-radius: 50%; padding: 8px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); font-size: 16px;">
-                          ${report.type === 'GREEN' ? '🐾' : '🚫'}
-                        </div>`,
-              anchor: new window.naver.maps.Point(15, 15)
-          }
-        });
-        markersRef.current.push(marker);
+    reports.forEach(report => {
+      const marker = new window.naver.maps.Marker({
+        position: new window.naver.maps.LatLng(report.lat, report.lng),
+        map,
+        icon: {
+          content: `<div style="background:${report.type === 'GREEN' ? '#305C38' : '#D32F2F'};border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.25);font-size:14px;">${report.type === 'GREEN' ? '🐾' : '🚫'}</div>`,
+          anchor: new window.naver.maps.Point(16, 16),
+        },
       });
-    } catch (err) {
-      console.error("Marker Sync Error:", err);
-    }
+      markersRef.current.push(marker);
+    });
   }, [filteredPlaces, reports]);
 
+  /* ── Supabase 데이터 로드 ─────────────────── */
+  useEffect(() => {
+    (async () => {
+      const { data: placesData } = await supabase.from('places').select('*');
+      if (placesData?.length) {
+        setPlaces(placesData.map(p => ({
+          id: p.id,
+          name: p.name,
+          category: p.category,
+          isJindoCertified: p.jindo_certified,
+          tags: Array.isArray(p.tags) ? p.tags : [],
+          lat: p.lat,
+          lng: p.lng,
+        })));
+      }
 
-  // --- Handlers ---
+      const { data: pinsData } = await supabase.from('pins').select('*').eq('status', 'approved');
+      if (pinsData) setReports(pinsData);
+    })();
+
+    // 실시간 핀 구독
+    const ch = supabase
+      .channel('public:pins')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pins' }, payload => {
+        if (payload.new.status === 'approved') setReports(prev => [...prev, payload.new as Pin]);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(ch); };
+  }, []);
+
+  /* ── 선택된 장소 리뷰 ─────────────────────── */
+  useEffect(() => {
+    if (!selectedPlace) { setPlaceReviews([]); return; }
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-/.test(selectedPlace.id);
+    if (!isUUID) { setPlaceReviews([]); return; }
+    supabase.from('reviews').select('*')
+      .eq('place_id', selectedPlace.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setPlaceReviews(data ?? []));
+  }, [selectedPlace]);
+
+  /* ── 프로필 통계 ──────────────────────────── */
+  useEffect(() => {
+    (async () => {
+      const [pinsRes, logsRes, postsRes] = await Promise.all([
+        supabase.from('pins').select('id', { count: 'exact', head: true }),
+        supabase.from('jindo_logs').select('id', { count: 'exact', head: true }),
+        supabase.from('feed_posts').select('likes'),
+      ]);
+      const totalLikes = (postsRes.data ?? []).reduce((s: number, p: { likes: number }) => s + (p.likes ?? 0), 0);
+      setProfileStats({ pins: pinsRes.count ?? 0, logs: logsRes.count ?? 0, rewards: totalLikes });
+    })();
+  }, []);
+
+  /* ── 핸들러 ───────────────────────────────── */
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (adminCreds.id === APP_CONFIG.ADMIN.ID && adminCreds.pw === APP_CONFIG.ADMIN.PW) {
@@ -193,186 +238,62 @@ function MainContent() {
     }
   };
 
-  const handleAddReport = async (type: 'GREEN' | 'RED') => {
-    if (userLocation) {
-      const { error } = await supabase
-        .from('pins')
-        .insert([{ 
-          type, 
-          lat: userLocation.lat + (Math.random() - 0.5) * 0.002,
-          lng: userLocation.lng + (Math.random() - 0.5) * 0.002,
-          status: 'pending' 
-        }]);
+  const handleAddReport = useCallback(async (type: 'GREEN' | 'RED') => {
+    if (!userLocation) { alert('위치 정보를 가져오는 중입니다.'); return; }
+    const { error } = await supabase.from('pins').insert([{
+      type,
+      lat: userLocation.lat + (Math.random() - 0.5) * 0.002,
+      lng: userLocation.lng + (Math.random() - 0.5) * 0.002,
+      status: 'pending',
+    }]);
+    if (error) { alert('제보 중 오류가 발생했습니다.'); return; }
+    alert(`${type === 'GREEN' ? '🐾 환영 장소' : '🚫 거부 장소'} 제보가 접수되었습니다.\n관리자 승인 후 지도에 표시됩니다.`);
+  }, [userLocation]);
 
-      if (error) {
-        console.error('Error reporting pin:', error);
-        alert('제보 중 오류가 발생했습니다.');
-      } else {
-        alert(`${type === 'GREEN' ? '진돗개/대형견 환영' : '진돗개 거부'} 장소가 제보되었습니다. 관리자 승인 후 지도에 표시됩니다.`);
-      }
-    } else {
-      alert('사용자 위치 정보를 가져오는 중입니다.');
-    }
-  };
+  const toggleFilter = (label: string) =>
+    setActiveFilters(prev => prev.includes(label) ? prev.filter(f => f !== label) : [...prev, label]);
 
-
-  const handleNavigate = (place: Place) => {
-    window.open(
-      `https://map.naver.com/index.nhn?elng=${place.lng}&elat=${place.lat}&etext=${encodeURIComponent(place.name)}&menu=route`,
-      '_blank'
-    );
-  };
-
-  const toggleFilter = (label: string) => {
-    setActiveFilters(prev =>
-      prev.includes(label) ? prev.filter(f => f !== label) : [...prev, label]
-    );
-  };
-
-  // --- Supabase Integration ---
-  useEffect(() => {
-    const fetchPlaces = async () => {
-      const { data, error } = await supabase.from('places').select('*');
-      if (error) {
-        console.error('Error fetching places:', error);
-        return;
-      }
-      if (data) {
-        const transformed: Place[] = data.map((p) => ({
-          id: p.id,
-          name: p.name,
-          category: p.category,
-          isJindoCertified: p.jindo_certified,
-          tags: Array.isArray(p.tags) ? p.tags : [],
-          lat: p.lat,
-          lng: p.lng
-        }));
-        if (transformed.length > 0) setPlaces(transformed);
-      }
-    };
-
-    const fetchPins = async () => {
-      const { data, error } = await supabase.from('pins').select('*').eq('status', 'approved');
-      if (error) {
-        console.error('Error fetching pins:', error);
-        return;
-      }
-      if (data) {
-        setReports(data);
-      }
-    };
-
-    fetchPlaces();
-    fetchPins();
-
-    const pinSubscription = supabase
-      .channel('public:pins')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pins' }, (payload) => {
-        if (payload.new.status === 'approved') {
-          setReports(prev => [...prev, payload.new as Pin]);
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(pinSubscription);
-    };
-  }, []);
-
-  // 선택된 장소의 리뷰 불러오기
-  useEffect(() => {
-    if (!selectedPlace) { setPlaceReviews([]); return; }
+  const handleRefreshReviews = useCallback(() => {
+    if (!selectedPlace) return;
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-/.test(selectedPlace.id);
-    if (!isUUID) { setPlaceReviews([]); return; }
-    supabase
-      .from('reviews')
-      .select('*')
+    if (!isUUID) return;
+    supabase.from('reviews').select('*')
       .eq('place_id', selectedPlace.id)
       .order('created_at', { ascending: false })
       .then(({ data }) => setPlaceReviews(data ?? []));
   }, [selectedPlace]);
 
-  // 프로필 통계 불러오기
-  useEffect(() => {
-    const fetchStats = async () => {
-      const [pinsRes, logsRes, postsRes] = await Promise.all([
-        supabase.from('pins').select('id', { count: 'exact', head: true }),
-        supabase.from('jindo_logs').select('id', { count: 'exact', head: true }),
-        supabase.from('feed_posts').select('likes'),
-      ]);
-      const totalLikes = (postsRes.data ?? []).reduce((s: number, p: { likes: number }) => s + (p.likes ?? 0), 0);
-      setProfileStats({
-        pins: pinsRes.count ?? 0,
-        logs: logsRes.count ?? 0,
-        rewards: totalLikes,
-      });
-    };
-    fetchStats();
-  }, []);
-
-  // GPS Location
-  useEffect(() => {
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition((position) => {
-        const loc = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        };
-        setUserLocation(loc);
-        if (naverMapInstance.current && window.naver) {
-            naverMapInstance.current.setCenter(new window.naver.maps.LatLng(loc.lat, loc.lng));
-        }
-      }, (err) => {
-        console.error("GPS Error:", err);
-        let msg = "위치 정보를 가져올 수 없습니다.";
-        if (err.code === 1) msg = "위치 정보 권한이 거부되었습니다. 설정에서 위치 권한을 허용해 주세요.";
-        else if (err.code === 2) msg = "위치 정보를 사용할 수 없습니다 (네트워크/GPS 신호 약함).";
-        else if (err.code === 3) msg = "위치 정보 획득 시간이 초과되었습니다.";
-        console.warn(msg);
-      });
-    }
-  }, []);
-
-  const renderActiveTabContent = () => {
+  /* ── 탭 렌더링 ────────────────────────────── */
+  const renderTab = () => {
+    /* Admin */
     if (currentTab === 'Admin') {
       if (!isAdminLoggedIn) {
         return (
-          <div className="flex-1 flex items-center justify-center bg-[#F0F2F5] p-6">
+          <div className="page-content flex items-center justify-center p-6">
             <form onSubmit={handleAdminLogin} className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm space-y-6">
               <div className="flex items-center gap-3">
-                <ShieldAlert size={32} className="text-[#315926]" />
-                <h2 className="text-2xl font-black text-[#543013]">Admin Login</h2>
+                <ShieldAlert size={28} className="text-[#315926]" />
+                <h2 className="text-2xl font-black text-[#543013]">관리자 로그인</h2>
               </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-[#715a4a] mb-1 uppercase tracking-widest">Admin ID</label>
+              {[
+                { label: 'Admin ID', key: 'id', type: 'text', placeholder: 'ID' },
+                { label: 'Password', key: 'pw', type: 'password', placeholder: '••••••••' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="block text-xs font-bold text-[#715a4a] mb-2 uppercase tracking-widest">{f.label}</label>
                   <input
-                    type="text"
-                    value={adminCreds.id}
-                    onChange={(e) => setAdminCreds({ ...adminCreds, id: e.target.value })}
-                    className="w-full p-4 bg-[#fcf9f4] border border-[#ebe8e3] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#315926]/20"
-                    placeholder="admin"
+                    type={f.type}
+                    value={adminCreds[f.key as 'id' | 'pw']}
+                    onChange={e => setAdminCreds(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder}
+                    className="w-full p-4 bg-[#fcf9f4] border border-[#ebe8e3] rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#315926]/20"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-[#715a4a] mb-1 uppercase tracking-widest">Password</label>
-                  <input
-                    type="password"
-                    value={adminCreds.pw}
-                    onChange={(e) => setAdminCreds({ ...adminCreds, pw: e.target.value })}
-                    className="w-full p-4 bg-[#fcf9f4] border border-[#ebe8e3] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#315926]/20"
-                    placeholder="1111"
-                  />
-                </div>
-              </div>
+              ))}
               <button type="submit" className="w-full p-4 bg-[#543013] text-white rounded-2xl font-black shadow-lg active:scale-95 transition-all">
                 로그인
               </button>
-              <button
-                type="button"
-                onClick={() => setCurrentTab('Map')}
-                className="w-full p-2 text-[#715a4a] font-bold text-sm"
-              >
+              <button type="button" onClick={() => setCurrentTab('Map')} className="w-full p-2 text-[#715a4a] font-bold text-sm">
                 취소
               </button>
             </form>
@@ -382,125 +303,86 @@ function MainContent() {
       return <AdminDashboard onLogout={() => setIsAdminLoggedIn(false)} />;
     }
 
-    if (currentTab === 'Feed') {
-      return <Feed />;
-    }
+    /* Feed */
+    if (currentTab === 'Feed') return <Feed />;
 
+    /* Profile */
     if (currentTab === 'Profile') {
       if (!userSession) {
         return (
-          <div className="flex-1 overflow-y-auto bg-[#fcf9f4] px-6 py-8 pb-32">
+          <div className="page-content px-6 py-8">
             <div className="max-w-md mx-auto space-y-8">
               <header className="space-y-2">
                 <h2 className="text-3xl font-serif text-[#543013]">환영합니다!</h2>
-                <p className="text-sm text-[#715a4a]">로그인하여 나만의 산책 로그와 <br/>반려견 성장 카드를 관리해보세요.</p>
+                <p className="text-sm text-[#715a4a]">로그인하여 나만의 산책 로그와<br />반려견 성장 카드를 관리해보세요.</p>
               </header>
-
-              <div className="space-y-4">
-                <button 
-                  onClick={signInWithGoogle}
-                  className="w-full h-[60px] bg-white border border-[#ebe8e3] rounded-[24px] flex items-center justify-center gap-4 shadow-sm hover:bg-gray-50 transition-all group"
-                >
-                  <img src="https://www.google.com/favicon.ico" className="w-5 h-5 opacity-70 group-hover:opacity-100" />
+              <div className="space-y-3">
+                <button onClick={signInWithGoogle} className="w-full h-[56px] bg-white border border-[#ebe8e3] rounded-3xl flex items-center justify-center gap-4 shadow-sm active:scale-95 transition-all">
+                  <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="" />
                   <span className="text-sm font-black text-[#543013]">Google로 시작하기</span>
                 </button>
-
-                <button 
-                  onClick={signInWithApple}
-                  className="w-full h-[60px] bg-[#000000] text-white rounded-[24px] flex items-center justify-center gap-4 shadow-lg hover:bg-gray-900 transition-all"
-                >
-                  <svg viewBox="0 0 384 512" width="20" height="20" fill="currentColor">
-                    <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/>
-                  </svg>
+                <button onClick={signInWithApple} className="w-full h-[56px] bg-black text-white rounded-3xl flex items-center justify-center gap-4 shadow-lg active:scale-95 transition-all">
+                  <svg viewBox="0 0 384 512" width="18" height="18" fill="currentColor"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" /></svg>
                   <span className="text-sm font-black">Apple로 시작하기</span>
                 </button>
-
-                <button 
-                  onClick={signInWithFacebook}
-                  className="w-full h-[60px] bg-[#1877F2] text-white rounded-[24px] flex items-center justify-center gap-4 shadow-lg hover:bg-[#166fe5] transition-all"
-                >
-                  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                  </svg>
-                  <span className="text-sm font-black text-white">Facebook으로 로그인</span>
+                <button onClick={signInWithFacebook} className="w-full h-[56px] bg-[#1877F2] text-white rounded-3xl flex items-center justify-center gap-4 shadow-lg active:scale-95 transition-all">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
+                  <span className="text-sm font-black">Facebook으로 로그인</span>
                 </button>
               </div>
-
-              <div className="pt-8 border-t border-[#ebe8e3] text-center">
-                <p className="text-[10px] text-[#715a4a] leading-relaxed opacity-60">
-                   로그인 시 대견할지도의 <span className="underline">이용약관</span> 및 <span className="underline">개인정보 처리방침</span>에 동의하게 됩니다.
-                </p>
-              </div>
+              <p className="text-center text-[10px] text-[#715a4a] opacity-60 pt-4 border-t border-[#ebe8e3]">
+                로그인 시 대견할지도의 <span className="underline">이용약관</span> 및 <span className="underline">개인정보 처리방침</span>에 동의합니다.
+              </p>
             </div>
           </div>
         );
       }
-
       return (
-        <div className="flex-1 overflow-y-auto bg-[#fcf9f4] px-6 py-8 pb-32">
+        <div className="page-content px-6 py-8">
           <div className="max-w-md mx-auto space-y-8">
             <header className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-[32px] bg-white border border-[#ebe8e3] flex items-center justify-center text-[#715a4a] shadow-sm relative overflow-hidden">
-                  {userSession.user?.user_metadata?.avatar_url ? (
-                    <img src={userSession.user.user_metadata.avatar_url} className="w-full h-full object-cover" />
-                  ) : (
-                    <User size={40} />
-                  )}
-                  <div className="absolute bottom-0 right-0 w-6 h-6 bg-[#315926] flex items-center justify-center rounded-tl-xl text-white">
-                     <Plus size={14} />
-                  </div>
+                <div className="w-20 h-20 rounded-[32px] bg-white border border-[#ebe8e3] overflow-hidden flex items-center justify-center text-[#715a4a]">
+                  {userSession.user?.user_metadata?.avatar_url
+                    ? <img src={userSession.user.user_metadata.avatar_url} className="w-full h-full object-cover" alt="" />
+                    : <User size={40} />}
                 </div>
                 <div>
                   <h3 className="text-2xl font-serif text-[#543013]">{userSession.user?.user_metadata?.full_name || '보호자님'}</h3>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <span className="text-[10px] font-black text-[#315926] bg-[#315926]/10 px-2 py-0.5 rounded-full uppercase tracking-widest">Premium Guardian</span>
-                  </div>
+                  <span className="text-[10px] font-black text-[#315926] bg-[#315926]/10 px-2 py-0.5 rounded-full uppercase tracking-widest">Premium Guardian</span>
                 </div>
               </div>
               <div className="flex gap-2">
-                <button 
-                  onClick={() => supabase.auth.signOut()}
-                  className="p-3 bg-white border border-[#ebe8e3] rounded-[20px] text-[#ba1a1a] hover:bg-red-50 transition-all shadow-sm active:scale-90"
-                  title="로그아웃"
-                >
-                  <X size={20} />
+                <button onClick={() => supabase.auth.signOut()} className="p-3 bg-white border border-[#ebe8e3] rounded-2xl text-red-500 active:scale-90 transition-all" title="로그아웃">
+                  <X size={18} />
                 </button>
-                <button 
-                  onClick={() => setCurrentTab('Admin')}
-                  className="p-3 bg-white border border-[#ebe8e3] rounded-[20px] text-[#715a4a] hover:bg-[#f0ede9] transition-all shadow-sm active:scale-90"
-                >
-                  <ShieldCheck size={22} />
+                <button onClick={() => setCurrentTab('Admin')} className="p-3 bg-white border border-[#ebe8e3] rounded-2xl text-[#715a4a] active:scale-90 transition-all">
+                  <ShieldCheck size={20} />
                 </button>
               </div>
             </header>
-
             <div className="grid grid-cols-3 gap-3">
               {[
-                { label: '활동 핀', count: String(profileStats.pins) },
-                { label: '기록', count: String(profileStats.logs) },
-                { label: '리워드', count: profileStats.rewards >= 1000 ? `${(profileStats.rewards / 1000).toFixed(1)}k` : String(profileStats.rewards) }
-              ].map((stat, i) => (
-                <div key={i} className="bg-white p-5 rounded-[28px] border border-[#ebe8e3] text-center shadow-sm">
-                  <p className="text-2xl font-serif text-[#543013]">{stat.count}</p>
-                  <p className="text-[9px] font-black text-[#715a4a] uppercase tracking-widest mt-1 opacity-60">{stat.label}</p>
+                { label: '활동 핀', count: profileStats.pins },
+                { label: '기록', count: profileStats.logs },
+                { label: '리워드', count: profileStats.rewards >= 1000 ? `${(profileStats.rewards / 1000).toFixed(1)}k` : profileStats.rewards },
+              ].map((s, i) => (
+                <div key={i} className="bg-white p-5 rounded-[28px] border border-[#ebe8e3] text-center">
+                  <p className="text-2xl font-serif text-[#543013]">{s.count}</p>
+                  <p className="text-[9px] font-black text-[#715a4a] uppercase tracking-widest mt-1 opacity-60">{s.label}</p>
                 </div>
               ))}
             </div>
-
             <div className="space-y-3">
-              <h4 className="text-xs font-black text-[#715a4a] uppercase tracking-widest px-1 opacity-60">Account Settings</h4>
               {[
                 { icon: <Bell size={20} />, label: '알림 및 푸시 설정', right: 'On' },
                 { icon: <Heart size={20} />, label: '찜한 장소 보관함' },
                 { icon: <Users size={20} />, label: '커뮤니티 활동 관리' },
-                { icon: <Settings size={20} />, label: '개인정보 보호 설정' }
+                { icon: <Settings size={20} />, label: '개인정보 보호 설정' },
               ].map((item, i) => (
-                <button key={i} className="w-full bg-white p-5 rounded-[28px] border border-[#ebe8e3] shadow-sm flex items-center justify-between group hover:bg-[#315926]/5 transition-all text-[#543013]">
+                <button key={i} className="w-full bg-white p-5 rounded-[28px] border border-[#ebe8e3] flex items-center justify-between group hover:bg-[#315926]/5 transition-all text-[#543013]">
                   <div className="flex items-center gap-4">
-                    <div className="p-2.5 bg-[#fcf9f4] rounded-2xl text-[#715a4a] group-hover:text-[#315926] transition-colors">
-                      {item.icon}
-                    </div>
+                    <div className="p-2.5 bg-[#fcf9f4] rounded-2xl text-[#715a4a] group-hover:text-[#315926] transition-colors">{item.icon}</div>
                     <span className="text-sm font-bold">{item.label}</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -510,118 +392,106 @@ function MainContent() {
                 </button>
               ))}
             </div>
-
-            <button className="w-full p-5 bg-[#315926]/5 border border-dashed border-[#315926]/30 rounded-[28px] text-[#315926] font-bold text-sm flex items-center justify-center gap-2">
-                <Plus size={18} /> 친구 초대하고 포인트 받기
-            </button>
           </div>
         </div>
       );
     }
 
+    /* Map */
     if (currentTab === 'Map') {
       return (
-        <main className="map-container relative">
-          <div className="filter-container">
-            {['진돗개 환영', '10kg+ 가능', '입마개 미필수', '실외 배변 명당'].map(label => (
+        <div className="map-container">
+          {/* 필터 바 */}
+          <div className="filter-bar">
+            {FILTERS.map(label => (
               <button
                 key={label}
                 className={`chip ${activeFilters.includes(label) ? 'active' : ''}`}
                 onClick={() => toggleFilter(label)}
               >
-                {label === '진돗개 환영' && <Leaf size={14} style={{ marginRight: '4px' }} />}
+                {label === '진돗개 환영' && <Leaf size={12} />}
                 {label}
               </button>
             ))}
           </div>
 
-          <div 
-            id="map" 
-            ref={mapRef} 
-            className="w-full h-full min-h-[300px] bg-[#F0F2F5]"
-          >
-            {!window.naver?.maps && <div className="flex items-center justify-center h-full text-center p-8 text-[#715a4a] font-bold">지도를 불러오지 못했습니다. <br/>(네이버 API 인증 정보를 확인해주세요)</div>}
+          {/* 지도 */}
+          <div id="naver-map" ref={mapContainerRef}>
+            {!window.naver?.maps && (
+              <div className="map-placeholder">
+                지도를 불러오지 못했습니다.<br />
+                네이버 지도 API 키(.env → VITE_NAVER_CLIENT_ID)를<br />확인해주세요.
+              </div>
+            )}
           </div>
 
-          <div className="absolute right-4 bottom-[50px] flex flex-col gap-3 z-[1000]">
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              onClick={() => handleAddReport('GREEN')}
-              className="w-14 h-14 bg-[#315926] text-white rounded-2xl shadow-xl flex items-center justify-center border-2 border-white/20"
-            >
-              <Plus size={28} />
+          {/* 핀 제보 버튼 */}
+          <div className="absolute right-4 bottom-4 flex flex-col gap-3 z-50">
+            <motion.button whileTap={{ scale: 0.88 }} onClick={() => handleAddReport('GREEN')}
+              className="w-14 h-14 bg-[#305C38] text-white rounded-2xl shadow-xl flex items-center justify-center border-2 border-white/20">
+              <Plus size={26} />
             </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              onClick={() => handleAddReport('RED')}
-              className="w-14 h-14 bg-[#ba1a1a] text-white rounded-2xl shadow-xl flex items-center justify-center border-2 border-white/20"
-            >
-              <ShieldAlert size={28} />
+            <motion.button whileTap={{ scale: 0.88 }} onClick={() => handleAddReport('RED')}
+              className="w-14 h-14 bg-[#D32F2F] text-white rounded-2xl shadow-xl flex items-center justify-center border-2 border-white/20">
+              <ShieldAlert size={22} />
             </motion.button>
           </div>
 
+          {/* 바텀시트 */}
           <AnimatePresence>
             {selectedPlace && (
-              <motion.div 
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
+              <motion.div
+                initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 30, stiffness: 300 }}
                 className="bottom-sheet"
               >
                 <div className="handle" onClick={() => setSelectedPlace(null)} />
-                <div className="p-2">
-                  <div className="flex justify-between items-start mb-6">
+                <div className="pb-8">
+                  <div className="flex justify-between items-start mb-5">
                     <div className="space-y-1">
-                      <h2 className="text-3xl font-serif text-[#543013]">{selectedPlace.name}</h2>
+                      <h2 className="text-2xl font-serif text-[#543013]">{selectedPlace.name}</h2>
                       <div className="flex items-center gap-1.5 text-[#315926] font-black text-[10px] uppercase tracking-widest">
-                        <Leaf size={14} fill="currentColor" /> Jindo-Friendly Certified
+                        <Leaf size={12} fill="currentColor" /> Jindo-Friendly
                       </div>
                     </div>
                     <button onClick={() => setSelectedPlace(null)} className="p-2 bg-[#f0ede9] rounded-full text-[#715a4a]">
-                        <X size={20} />
+                      <X size={18} />
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3 mb-8">
+                  <div className="grid grid-cols-3 gap-3 mb-6">
                     {[
-                        { icon: <PawPrint size={20} color="#8B5E3C" />, label: '대형견 가능' },
-                        { icon: <Leaf size={20} color="#315926" />, label: '잔디밭' },
-                        { icon: <Droplets size={20} color="#0277BD" />, label: '식수대' }
-                    ].map((feat, i) => (
-                        <div key={i} className="flex flex-col items-center gap-2 p-4 bg-[#fcf9f4] rounded-[24px] border border-[#ebe8e3]">
-                            {feat.icon}
-                            <span className="text-[10px] font-bold text-[#715a4a]">{feat.label}</span>
-                        </div>
+                      { icon: <PawPrint size={18} className="text-[#8B5E3C]" />, label: '대형견 가능' },
+                      { icon: <Leaf size={18} className="text-[#315926]" />, label: '잔디밭' },
+                      { icon: <Droplets size={18} className="text-blue-500" />, label: '식수대' },
+                    ].map((f, i) => (
+                      <div key={i} className="flex flex-col items-center gap-1.5 p-3 bg-[#fcf9f4] rounded-2xl border border-[#ebe8e3]">
+                        {f.icon}
+                        <span className="text-[10px] font-bold text-[#715a4a]">{f.label}</span>
+                      </div>
                     ))}
                   </div>
 
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-black text-[#543013] uppercase tracking-widest opacity-60">
-                      최근 보호자 리뷰{placeReviews.length > 0 ? ` (${placeReviews.length})` : ''}
+                  <div className="space-y-3 mb-6">
+                    <h3 className="text-xs font-black text-[#543013] uppercase tracking-widest opacity-60">
+                      최근 리뷰{placeReviews.length > 0 ? ` (${placeReviews.length})` : ''}
                     </h3>
                     {placeReviews.length === 0 ? (
-                      <div className="bg-white p-5 rounded-[28px] border border-[#ebe8e3] text-center text-sm text-[#715a4a] py-6 opacity-60">
-                        아직 리뷰가 없어요. 첫 번째 리뷰를 남겨보세요!
-                      </div>
+                      <div className="bg-[#f0ede9] p-4 rounded-2xl text-center text-sm text-[#715a4a]">첫 번째 리뷰를 남겨보세요!</div>
                     ) : (
                       placeReviews.slice(0, 2).map((review: any) => (
-                        <div key={review.id} className="bg-white p-5 rounded-[28px] border border-[#ebe8e3] shadow-sm space-y-3">
+                        <div key={review.id} className="bg-[#f0ede9] p-4 rounded-2xl space-y-2">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-[#fcf9f4] flex items-center justify-center border border-[#ebe8e3] text-[#715a4a]">
-                                <User size={20} />
-                              </div>
-                              <div>
-                                <p className="text-sm font-bold text-[#543013]">
-                                  {review.user_nickname}
-                                  {review.user_pet_breed ? ` (${review.user_pet_breed}${review.user_pet_weight ? ` · ${review.user_pet_weight}kg` : ''})` : ''}
-                                </p>
-                                <p className="text-[10px] text-[#715a4a]">{new Date(review.created_at).toLocaleDateString('ko-KR')}</p>
-                              </div>
+                            <div>
+                              <p className="text-sm font-bold text-[#543013]">
+                                {review.user_nickname}
+                                {review.user_pet_breed ? ` (${review.user_pet_breed}${review.user_pet_weight ? ` · ${review.user_pet_weight}kg` : ''})` : ''}
+                              </p>
+                              <p className="text-[10px] text-[#715a4a]">{new Date(review.created_at).toLocaleDateString('ko-KR')}</p>
                             </div>
                             <div className="flex">
-                              {[1,2,3,4,5].map(s => (
-                                <Star key={s} size={11} className={s <= review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'} />
+                              {[1, 2, 3, 4, 5].map(s => (
+                                <Star key={s} size={10} className={s <= review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'} />
                               ))}
                             </div>
                           </div>
@@ -631,144 +501,109 @@ function MainContent() {
                     )}
                   </div>
 
-                  <div className="flex gap-4 mt-8 pb-4">
-                     <button
-                       onClick={() => handleNavigate(selectedPlace)}
-                       className="flex-1 p-5 bg-[#543013] text-white rounded-[24px] font-black shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all">
-                        <Navigation size={20} /> 길찾기
-                     </button>
-                     <button
-                       onClick={() => setShowReviewModal(true)}
-                       className="flex-1 p-5 bg-white border border-[#543013] text-[#543013] rounded-[24px] font-black flex items-center justify-center gap-2 active:scale-95 transition-all">
-                        <Edit3 size={20} /> 리뷰 작성
-                     </button>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => window.open(`https://map.naver.com/index.nhn?elng=${selectedPlace.lng}&elat=${selectedPlace.lat}&etext=${encodeURIComponent(selectedPlace.name)}&menu=route`, '_blank')}
+                      className="flex-1 p-4 bg-[#543013] text-white rounded-2xl font-black flex items-center justify-center gap-2 active:scale-95 transition-all">
+                      <Navigation size={18} /> 길찾기
+                    </button>
+                    <button
+                      onClick={() => setShowReviewModal(true)}
+                      className="flex-1 p-4 bg-white border border-[#543013] text-[#543013] rounded-2xl font-black flex items-center justify-center gap-2 active:scale-95 transition-all">
+                      <Edit3 size={18} /> 리뷰 작성
+                    </button>
                   </div>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
-        </main>
-      );
-    }
-
-    if (currentTab === 'Growth') {
-      return <JindoLog />;
-    }
-
-    if (currentTab === 'AICare') {
-      return <AIGrowthCare />;
-    }
-
-    if (currentTab === 'Hub') {
-      return (
-        <div className="flex-1 overflow-y-auto bg-[#fcf9f4] px-6 py-8 pb-32">
-            <div className="max-w-md mx-auto space-y-8">
-                <header className="space-y-1">
-                    <h2 className="text-3xl font-serif text-[#543013]">{hubMode === 'names' ? 'AI 이름 천재' : '공유 허브'}</h2>
-                    <p className="text-xs text-[#715a4a] font-bold uppercase tracking-widest">{hubMode === 'names' ? 'Identity recommendation' : 'Multi-channel distribution'}</p>
-                </header>
-
-                <div className="flex bg-[#f0ede9] p-1.5 rounded-[24px] border border-[#ebe8e3]">
-                    <button 
-                        onClick={() => setHubMode('names')}
-                        className={cn("flex-1 py-3.5 px-4 rounded-[20px] text-[11px] font-black uppercase tracking-wider transition-all", hubMode === 'names' ? "bg-white shadow-md text-[#543013]" : "text-[#715a4a] opacity-60")}
-                    >
-                        <Sparkles size={16} className="inline mr-2" /> Name Genius
-                    </button>
-                    <button 
-                        onClick={() => setHubMode('share')}
-                        className={cn("flex-1 py-3.5 px-4 rounded-[20px] text-[11px] font-black uppercase tracking-wider transition-all", hubMode === 'share' ? "bg-white shadow-md text-[#543013]" : "text-[#715a4a] opacity-60")}
-                    >
-                        <Share2 size={16} className="inline mr-2" /> Share Hub
-                    </button>
-                </div>
-
-                <motion.div
-                    key={hubMode}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                >
-                    {hubMode === 'names' ? <DogNameGenerator /> : <ShareHub />}
-                </motion.div>
-            </div>
         </div>
       );
     }
 
-    return (
-      <div className="flex-1 flex items-center justify-center text-[#715a4a] font-bold">
-        준비 중인 페이지입니다. ({currentTab})
-      </div>
-    );
+    /* Growth Log */
+    if (currentTab === 'Growth') return <JindoLog />;
+
+    /* AI Care */
+    if (currentTab === 'AICare') return <AIGrowthCare />;
+
+    /* Hub */
+    if (currentTab === 'Hub') {
+      return (
+        <div className="page-content px-6 py-8">
+          <div className="max-w-md mx-auto space-y-6">
+            <header>
+              <h2 className="text-3xl font-serif text-[#543013]">{hubMode === 'names' ? 'AI 이름 천재' : '공유 허브'}</h2>
+              <p className="text-xs text-[#715a4a] font-bold uppercase tracking-widest mt-1">
+                {hubMode === 'names' ? 'Name recommendation' : 'Multi-channel share'}
+              </p>
+            </header>
+            <div className="flex bg-[#f0ede9] p-1.5 rounded-3xl border border-[#ebe8e3]">
+              {(['names', 'share'] as const).map(mode => (
+                <button key={mode} onClick={() => setHubMode(mode)}
+                  className={cn('flex-1 py-3 px-4 rounded-[20px] text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5',
+                    hubMode === mode ? 'bg-white shadow-md text-[#543013]' : 'text-[#715a4a] opacity-60')}>
+                  {mode === 'names' ? <><Sparkles size={14} /> Name Genius</> : <><Star size={14} /> Share Hub</>}
+                </button>
+              ))}
+            </div>
+            <motion.div key={hubMode} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ type: 'spring', damping: 25 }}>
+              {hubMode === 'names' ? <DogNameGenerator /> : <ShareHub />}
+            </motion.div>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
   };
+
+  /* ── 탭 목록 ──────────────────────────────── */
+  const NAV_ITEMS: { tab: Tab; icon: React.ReactNode; label: string }[] = [
+    { tab: 'Feed', icon: <LayoutGrid size={22} />, label: 'Feed' },
+    { tab: 'Growth', icon: <Users size={22} />, label: 'Log' },
+    { tab: 'AICare', icon: <Heart size={22} />, label: 'Care' },
+    { tab: 'Map', icon: <MapIcon size={22} />, label: 'Map' },
+    { tab: 'Hub', icon: <Sparkles size={22} />, label: 'Hub' },
+    { tab: 'Profile', icon: <User size={22} />, label: 'My' },
+  ];
 
   return (
     <>
       <header className="app-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <PawPrint size={24} color="#8B5E3C" fill="#8B5E3C" />
-          <h1 style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '-1px' }}>대견할지도</h1>
+        <div className="flex items-center gap-2">
+          <PawPrint size={22} color="#8B5E3C" fill="#8B5E3C" />
+          <h1 style={{ fontSize: '18px', fontWeight: 900, letterSpacing: '-0.5px', color: '#543013' }}>대견할지도</h1>
         </div>
-        <div style={{ display: 'flex', gap: '16px' }}>
-          <Search size={22} color="#666" />
-          <Bell size={22} color="#666" />
+        <div className="flex gap-4">
+          <button className="p-1" aria-label="검색"><Search size={20} color="#999" /></button>
+          <button className="p-1" aria-label="알림"><Bell size={20} color="#999" /></button>
         </div>
       </header>
 
-      {renderActiveTabContent()}
+      {renderTab()}
 
       <AnimatePresence>
         {showReviewModal && selectedPlace && (
           <ReviewModal
             place={selectedPlace}
-            onClose={() => {
-              setShowReviewModal(false);
-              // 모달 닫은 후 리뷰 목록 갱신
-              const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-/.test(selectedPlace.id);
-              if (isUUID) {
-                supabase.from('reviews').select('*').eq('place_id', selectedPlace.id)
-                  .order('created_at', { ascending: false })
-                  .then(({ data }) => setPlaceReviews(data ?? []));
-              }
-            }}
+            onClose={() => { setShowReviewModal(false); handleRefreshReviews(); }}
           />
         )}
       </AnimatePresence>
 
       <nav className="bottom-nav">
-        <div className={`nav-item ${currentTab === 'Feed' ? 'active' : ''}`} onClick={() => setCurrentTab('Feed')}>
-          <LayoutGrid size={24} />
-          <span>Feed</span>
-        </div>
-        <div className={`nav-item ${currentTab === 'Growth' ? 'active' : ''}`} onClick={() => setCurrentTab('Growth')}>
-          <Users size={24} />
-          <span>Log</span>
-        </div>
-        <div className={`nav-item ${currentTab === 'AICare' ? 'active' : ''}`} onClick={() => setCurrentTab('AICare')}>
-          <Heart size={24} />
-          <span>Care</span>
-        </div>
-        <div className={`nav-item ${currentTab === 'Map' ? 'active' : ''}`} onClick={() => setCurrentTab('Map')}>
-          <MapIcon size={24} />
-          <span>Map</span>
-        </div>
-        <div className={`nav-item ${currentTab === 'Hub' ? 'active' : ''}`} onClick={() => setCurrentTab('Hub')}>
-          <Sparkles size={24} />
-          <span>Hub</span>
-        </div>
-        <div className={`nav-item ${currentTab === 'Profile' ? 'active' : ''}`} onClick={() => setCurrentTab('Profile')}>
-          <User size={24} />
-          <span>Profile</span>
-        </div>
+        {NAV_ITEMS.map(({ tab, icon, label }) => (
+          <button
+            key={tab}
+            className={`nav-item ${currentTab === tab ? 'active' : ''}`}
+            onClick={() => setCurrentTab(tab)}
+          >
+            {icon}
+            <span>{label}</span>
+          </button>
+        ))}
       </nav>
     </>
   );
 }
-
-function App() {
-  return <MainContent />;
-}
-
-export default App;
-
