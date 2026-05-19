@@ -79,18 +79,47 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
     } finally { setLoading(false); }
   };
 
-  const handleUrlParse = () => {
+  const handleUrlParse = async () => {
     setUrlError('');
     if (!mapUrl.trim()) return;
-    if (mapUrl.includes('maps.app.goo.gl') || mapUrl.includes('goo.gl/maps')) {
+
+    const input = mapUrl.trim();
+
+    // 플러스코드 감지 (예: J2CR+H6 서울특별시 or F4JX+29 하남시 경기도)
+    const plusCodeMatch = input.match(/^([A-Z0-9]{4}\+[A-Z0-9]{2,3})\s*(.*)$/i);
+    if (plusCodeMatch) {
+      try {
+        const query = encodeURIComponent(input);
+        const res = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=AIzaSyAZvFsLE0TJZgkNapM6iZx12w2S9cfuvbE&language=ko`
+        );
+        const data = await res.json();
+        if (data.status === 'OK' && data.results[0]) {
+          const loc = data.results[0].geometry.location;
+          const name = data.results[0].formatted_address || '';
+          setNewPlace(prev => ({ ...prev, lat: loc.lat, lng: loc.lng, name: prev.name || name }));
+          setUrlError('');
+        } else {
+          setUrlError('플러스코드 변환 실패. 구글 지도에서 직접 검색 후 전체 URL을 복사해주세요.');
+        }
+      } catch {
+        setUrlError('네트워크 오류. 잠시 후 다시 시도해주세요.');
+      }
+      return;
+    }
+
+    // 구글 단축 URL
+    if (input.includes('maps.app.goo.gl') || input.includes('goo.gl/maps')) {
       setUrlError('구글 단축 링크는 지원되지 않습니다.\n브라우저에서 열어 주소창의 전체 URL을 복사해주세요.');
       return;
     }
-    const coords = extractCoordsFromUrl(mapUrl);
+
+    // 일반 지도 URL
+    const coords = extractCoordsFromUrl(input);
     if (coords) {
       setNewPlace(prev => ({ ...prev, lat: coords.lat, lng: coords.lng, name: coords.name || prev.name }));
     } else {
-      setUrlError('좌표를 찾을 수 없습니다. 구글/네이버 지도 전체 URL을 사용해주세요.');
+      setUrlError('좌표를 찾을 수 없습니다. 구글/네이버 지도 전체 URL 또는 플러스코드를 사용해주세요.');
     }
   };
 
@@ -179,7 +208,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     <input
                       value={mapUrl}
                       onChange={e => { setMapUrl(e.target.value); setUrlError(''); }}
-                      placeholder="https://www.google.com/maps/place/장소명/@37.5100,126.9950..."
+                      placeholder="플러스코드(J2CR+H6 서울) 또는 구글/네이버 지도 전체 URL"
                       style={{ ...inp, flex: 1 }}
                     />
                     <button type="button" onClick={handleUrlParse}
@@ -191,7 +220,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     <p style={{ fontSize: '11px', color: '#D32F2F', marginTop: '6px', lineHeight: 1.6, whiteSpace: 'pre-line' }}>⚠ {urlError}</p>
                   ) : (
                     <p style={{ fontSize: '11px', color: '#666', marginTop: '6px' }}>
-                      💡 구글 단축링크(goo.gl)는 브라우저에서 열어 주소창의 전체 URL을 복사해주세요.
+                      💡 플러스코드(예: J2CR+H6 서울특별시) 또는 구글/네이버 지도 전체 URL 지원
                     </p>
                   )}
                 </div>
