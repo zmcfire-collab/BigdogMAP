@@ -56,6 +56,9 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [pendingPins, setPendingPins] = useState<Pin[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddingPlace, setIsAddingPlace] = useState(false);
+  const [isBulkMode, setIsBulkMode] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkLoading, setBulkLoading] = useState(false);
   const [mapUrl, setMapUrl] = useState('');
   const [urlError, setUrlError] = useState('');
   const [newPlace, setNewPlace] = useState({ name: '', category: 'Cafe', lat: 0, lng: 0 });
@@ -121,6 +124,33 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
     } else {
       setUrlError('좌표를 찾을 수 없습니다. 구글/네이버 지도 전체 URL 또는 플러스코드를 사용해주세요.');
     }
+  };
+
+  // 대량 등록: 한 줄에 "장소명,카테고리,위도,경도" 형식
+  const handleBulkImport = async () => {
+    if (!bulkText.trim()) return;
+    setBulkLoading(true);
+    const lines = bulkText.trim().split('\n').filter(l => l.trim());
+    const rows = lines.map(line => {
+      const parts = line.split(',').map(p => p.trim());
+      if (parts.length < 4) return null;
+      const lat = parseFloat(parts[2]);
+      const lng = parseFloat(parts[3]);
+      if (isNaN(lat) || isNaN(lng)) return null;
+      return { name: parts[0], category: parts[1] || 'Cafe', lat, lng };
+    }).filter(Boolean);
+
+    if (rows.length === 0) { alert('올바른 형식의 데이터가 없습니다.\n형식: 장소명,카테고리,위도,경도'); setBulkLoading(false); return; }
+
+    const { error } = await supabase.from('places').insert(rows as any[]);
+    if (error) { alert('오류: ' + error.message); }
+    else {
+      alert(`${rows.length}개 장소가 등록되었습니다!`);
+      setBulkText('');
+      setIsBulkMode(false);
+      fetchData();
+    }
+    setBulkLoading(false);
   };
 
   const handleAddPlace = async (e: React.FormEvent) => {
@@ -191,11 +221,39 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 800 }}>전체 등록 장소 ({places.length})</h2>
-              <button onClick={() => setIsAddingPlace(!isAddingPlace)}
-                style={{ padding: '10px 16px', background: isAddingPlace ? '#999' : '#305C38', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <PlusCircle size={16} /> {isAddingPlace ? '취소' : '새 장소 추가'}
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => { setIsBulkMode(!isBulkMode); setIsAddingPlace(false); }}
+                  style={{ padding: '10px 14px', background: isBulkMode ? '#999' : '#1A73E8', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', fontSize: '12px' }}>
+                  📋 {isBulkMode ? '취소' : '대량 등록'}
+                </button>
+                <button onClick={() => { setIsAddingPlace(!isAddingPlace); setIsBulkMode(false); }}
+                  style={{ padding: '10px 14px', background: isAddingPlace ? '#999' : '#305C38', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
+                  <PlusCircle size={15} /> {isAddingPlace ? '취소' : '단건 추가'}
+                </button>
+              </div>
             </div>
+
+            {/* 대량 등록 패널 */}
+            {isBulkMode && (
+              <div style={{ background: 'white', padding: '20px', borderRadius: '12px', marginBottom: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                <p style={{ fontSize: '13px', fontWeight: 800, color: '#1A73E8', marginBottom: '8px' }}>📋 대량 등록</p>
+                <p style={{ fontSize: '11px', color: '#666', marginBottom: '10px', lineHeight: 1.6 }}>
+                  한 줄에 하나씩 입력하세요: <strong>장소명,카테고리,위도,경도</strong><br />
+                  카테고리: Cafe / Park / Restaurant / Hotel / Training / Playground<br />
+                  예) 반포한강공원,Park,37.5100,126.9950
+                </p>
+                <textarea
+                  value={bulkText}
+                  onChange={e => setBulkText(e.target.value)}
+                  placeholder={"반포한강공원,Park,37.5100,126.9950\n올림픽공원,Park,37.5219,127.1217\n더희원,Cafe,37.6234,126.9012"}
+                  style={{ width: '100%', height: '160px', padding: '10px', border: '1px solid #DDD', borderRadius: '8px', fontSize: '13px', fontFamily: 'monospace', resize: 'vertical' }}
+                />
+                <button onClick={handleBulkImport} disabled={bulkLoading || !bulkText.trim()}
+                  style={{ marginTop: '10px', width: '100%', padding: '12px', background: bulkLoading ? '#999' : '#1A73E8', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 800, cursor: 'pointer' }}>
+                  {bulkLoading ? '등록 중...' : `일괄 등록하기`}
+                </button>
+              </div>
+            )}
 
             {isAddingPlace && (
               <div style={{ background: 'white', padding: '20px', borderRadius: '12px', marginBottom: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>

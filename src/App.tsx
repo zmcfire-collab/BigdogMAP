@@ -13,7 +13,7 @@ import { AdminDashboard } from './AdminDashboard';
 import { JindoLog } from './JindoLog';
 import { AIGrowthCare } from './AIGrowthCare';
 import { DogNameGenerator } from './DogNameGenerator';
-import { supabase, signInWithGoogle } from './supabase';
+import { supabase, signInWithGoogle, signInWithApple, signInWithFacebook } from './supabase';
 import { APP_CONFIG } from './config';
 import './index.css';
 
@@ -41,17 +41,7 @@ interface Pin {
 type Tab = 'Map' | 'Feed' | 'Growth' | 'AICare' | 'Hub' | 'Profile' | 'Admin';
 
 /* ── 상수 ─────────────────────────────────────── */
-const MOCK_PLACES: Place[] = [
-  {
-    id: 'mock-1',
-    name: '반포 한강 공원',
-    category: 'Park',
-    isJindoCertified: true,
-    tags: ['대형견 가능', '넓은 잔디밭', '식수대 완비'],
-    lat: 37.5100,
-    lng: 126.9950,
-  },
-];
+const MOCK_PLACES: Place[] = []; // DB에서 불러오므로 비워둠
 
 const FILTERS = ['진돗개 환영', '10kg+ 가능', '입마개 미필수', '실외 배변 명당'];
 
@@ -71,6 +61,9 @@ export default function App() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [placeReviews, setPlaceReviews] = useState<any[]>([]);
   const [profileStats, setProfileStats] = useState({ pins: 0, logs: 0, rewards: 0 });
+  const [pinMode, setPinMode] = useState<'GREEN' | 'RED' | null>(null); // 제보 모드
+  const [clickedLocation, setClickedLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const clickMarkerRef = useRef<naver.maps.Marker | null>(null);
 
   /* 지도 refs */
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -115,6 +108,23 @@ export default function App() {
           mapDataControl: false,
           scaleControl: false,
         });
+
+        // 지도 클릭 이벤트 — 제보 위치 선택
+        window.naver.maps.Event.addListener(naverMapRef.current, 'click', (e: naver.maps.MapMouseEvent) => {
+          const lat = e.coord.lat();
+          const lng = e.coord.lng();
+          setClickedLocation({ lat, lng });
+          if (clickMarkerRef.current) clickMarkerRef.current.setMap(null);
+          clickMarkerRef.current = new window.naver.maps.Marker({
+            position: new window.naver.maps.LatLng(lat, lng),
+            map: naverMapRef.current!,
+            icon: {
+              content: '<div style="width:22px;height:22px;background:#FF6B35;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);"></div>',
+              anchor: new window.naver.maps.Point(11, 11),
+            },
+          });
+        });
+
         return true;
       } catch (err) {
         console.error('[지도 초기화 오류]', err);
@@ -239,16 +249,33 @@ export default function App() {
   };
 
   const handleAddReport = useCallback(async (type: 'GREEN' | 'RED') => {
-    if (!userLocation) { alert('위치 정보를 가져오는 중입니다.'); return; }
+    if (pinMode === type) {
+      // 이미 같은 모드 → 취소
+      setPinMode(null);
+      setClickedLocation(null);
+      if (clickMarkerRef.current) { clickMarkerRef.current.setMap(null); clickMarkerRef.current = null; }
+      return;
+    }
+    // 제보 모드 진입 — 지도를 클릭해 위치 선택
+    setPinMode(type);
+    setClickedLocation(null);
+    if (clickMarkerRef.current) { clickMarkerRef.current.setMap(null); clickMarkerRef.current = null; }
+  }, [pinMode]);
+
+  const handleSubmitReport = useCallback(async () => {
+    if (!pinMode || !clickedLocation) { alert('지도에서 제보할 위치를 먼저 클릭해주세요.'); return; }
     const { error } = await supabase.from('pins').insert([{
-      type,
-      lat: userLocation.lat + (Math.random() - 0.5) * 0.002,
-      lng: userLocation.lng + (Math.random() - 0.5) * 0.002,
+      type: pinMode,
+      lat: clickedLocation.lat,
+      lng: clickedLocation.lng,
       status: 'pending',
     }]);
     if (error) { alert('제보 중 오류가 발생했습니다.'); return; }
-    alert(`${type === 'GREEN' ? '🐾 환영 장소' : '🚫 거부 장소'} 제보가 접수되었습니다.\n관리자 승인 후 지도에 표시됩니다.`);
-  }, [userLocation]);
+    alert(`${pinMode === 'GREEN' ? '🐾 환영 장소' : '🚫 거부 장소'} 제보가 접수되었습니다.\n관리자 승인 후 지도에 표시됩니다.`);
+    setPinMode(null);
+    setClickedLocation(null);
+    if (clickMarkerRef.current) { clickMarkerRef.current.setMap(null); clickMarkerRef.current = null; }
+  }, [pinMode, clickedLocation]);
 
   const toggleFilter = (label: string) =>
     setActiveFilters(prev => prev.includes(label) ? prev.filter(f => f !== label) : [...prev, label]);
@@ -313,13 +340,21 @@ export default function App() {
           <div className="page-content px-6 py-8">
             <div className="max-w-md mx-auto space-y-8">
               <header className="space-y-2">
-                <h2 className="text-3xl font-sans text-[#543013]">환영합니다!</h2>
+                <h2 className="text-3xl font-serif text-[#543013]">환영합니다!</h2>
                 <p className="text-sm text-[#715a4a]">로그인하여 나만의 산책 로그와<br />반려견 성장 카드를 관리해보세요.</p>
               </header>
               <div className="space-y-3">
                 <button onClick={signInWithGoogle} className="w-full h-[56px] bg-white border border-[#ebe8e3] rounded-3xl flex items-center justify-center gap-4 shadow-sm active:scale-95 transition-all">
                   <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="" />
                   <span className="text-sm font-black text-[#543013]">Google로 시작하기</span>
+                </button>
+                <button onClick={signInWithApple} className="w-full h-[56px] bg-black text-white rounded-3xl flex items-center justify-center gap-4 shadow-lg active:scale-95 transition-all">
+                  <svg viewBox="0 0 384 512" width="18" height="18" fill="currentColor"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" /></svg>
+                  <span className="text-sm font-black">Apple로 시작하기</span>
+                </button>
+                <button onClick={signInWithFacebook} className="w-full h-[56px] bg-[#1877F2] text-white rounded-3xl flex items-center justify-center gap-4 shadow-lg active:scale-95 transition-all">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
+                  <span className="text-sm font-black">Facebook으로 로그인</span>
                 </button>
               </div>
               <p className="text-center text-[10px] text-[#715a4a] opacity-60 pt-4 border-t border-[#ebe8e3]">
@@ -340,7 +375,7 @@ export default function App() {
                     : <User size={40} />}
                 </div>
                 <div>
-                  <h3 className="text-2xl font-sans text-[#543013]">{userSession.user?.user_metadata?.full_name || '보호자님'}</h3>
+                  <h3 className="text-2xl font-serif text-[#543013]">{userSession.user?.user_metadata?.full_name || '보호자님'}</h3>
                   <span className="text-[10px] font-black text-[#315926] bg-[#315926]/10 px-2 py-0.5 rounded-full uppercase tracking-widest">Premium Guardian</span>
                 </div>
               </div>
@@ -360,7 +395,7 @@ export default function App() {
                 { label: '리워드', count: profileStats.rewards >= 1000 ? `${(profileStats.rewards / 1000).toFixed(1)}k` : profileStats.rewards },
               ].map((s, i) => (
                 <div key={i} className="bg-white p-5 rounded-[28px] border border-[#ebe8e3] text-center">
-                  <p className="text-2xl font-sans text-[#543013]">{s.count}</p>
+                  <p className="text-2xl font-serif text-[#543013]">{s.count}</p>
                   <p className="text-[9px] font-black text-[#715a4a] uppercase tracking-widest mt-1 opacity-60">{s.label}</p>
                 </div>
               ))}
@@ -417,14 +452,34 @@ export default function App() {
             )}
           </div>
 
+          {/* 제보 모드 안내 배너 */}
+          {pinMode && (
+            <div className="absolute top-16 left-0 right-0 z-50 flex justify-center px-4">
+              <div className={`flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl text-white text-sm font-bold ${pinMode === 'GREEN' ? 'bg-[#305C38]' : 'bg-[#D32F2F]'}`}>
+                <span>{pinMode === 'GREEN' ? '🐾 환영 장소' : '🚫 거부 장소'}</span>
+                <span className="font-normal opacity-90">지도에서 위치를 클릭하세요</span>
+                {clickedLocation && (
+                  <button onClick={handleSubmitReport}
+                    className="ml-2 bg-white/20 hover:bg-white/30 px-3 py-1 rounded-xl text-xs font-black">
+                    제보하기
+                  </button>
+                )}
+                <button onClick={() => { setPinMode(null); setClickedLocation(null); if (clickMarkerRef.current) { clickMarkerRef.current.setMap(null); clickMarkerRef.current = null; } }}
+                  className="ml-1 opacity-70 hover:opacity-100">
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* 핀 제보 버튼 */}
           <div className="absolute right-4 bottom-4 flex flex-col gap-3 z-50">
             <motion.button whileTap={{ scale: 0.88 }} onClick={() => handleAddReport('GREEN')}
-              className="w-14 h-14 bg-[#305C38] text-white rounded-2xl shadow-xl flex items-center justify-center border-2 border-white/20">
+              className={`w-14 h-14 rounded-2xl shadow-xl flex items-center justify-center border-2 text-white transition-all ${pinMode === 'GREEN' ? 'bg-[#305C38] border-white scale-110' : 'bg-[#305C38] border-white/20'}`}>
               <Plus size={26} />
             </motion.button>
             <motion.button whileTap={{ scale: 0.88 }} onClick={() => handleAddReport('RED')}
-              className="w-14 h-14 bg-[#D32F2F] text-white rounded-2xl shadow-xl flex items-center justify-center border-2 border-white/20">
+              className={`w-14 h-14 rounded-2xl shadow-xl flex items-center justify-center border-2 text-white transition-all ${pinMode === 'RED' ? 'bg-[#D32F2F] border-white scale-110' : 'bg-[#D32F2F] border-white/20'}`}>
               <ShieldAlert size={22} />
             </motion.button>
           </div>
@@ -441,7 +496,7 @@ export default function App() {
                 <div className="pb-8">
                   <div className="flex justify-between items-start mb-5">
                     <div className="space-y-1">
-                      <h2 className="text-2xl font-sans text-[#543013]">{selectedPlace.name}</h2>
+                      <h2 className="text-2xl font-serif text-[#543013]">{selectedPlace.name}</h2>
                       <div className="flex items-center gap-1.5 text-[#315926] font-black text-[10px] uppercase tracking-widest">
                         <Leaf size={12} fill="currentColor" /> Jindo-Friendly
                       </div>
@@ -525,7 +580,7 @@ export default function App() {
         <div className="page-content px-6 py-8">
           <div className="max-w-md mx-auto space-y-6">
             <header>
-              <h2 className="text-3xl font-sans text-[#543013]">{hubMode === 'names' ? 'AI 이름 천재' : '공유 허브'}</h2>
+              <h2 className="text-3xl font-serif text-[#543013]">{hubMode === 'names' ? 'AI 이름 천재' : '공유 허브'}</h2>
               <p className="text-xs text-[#715a4a] font-bold uppercase tracking-widest mt-1">
                 {hubMode === 'names' ? 'Name recommendation' : 'Multi-channel share'}
               </p>
