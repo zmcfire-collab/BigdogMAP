@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { supabase } from './supabase';
-
+import { APP_CONFIG } from './config';
 
 interface PetProfile {
   id: string;
@@ -133,9 +133,9 @@ export function AIGrowthCare() {
 
   const handleAiAnalysis = async () => {
     if (!pet) return;
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const apiKey = APP_CONFIG.GEMINI_API_KEY;
     if (!apiKey) {
-      setAiAnalysis('Gemini API 키가 설정되지 않았습니다.\nsrc/config.ts의 GEMINI_API_KEY를 입력해주세요.\n(발급: https://aistudio.google.com/app/apikey)');
+      setAiAnalysis('Gemini API 키가 설정되지 않았습니다.\n.env 파일 또는 src/config.ts의 GEMINI_API_KEY를 입력해주세요.\n(발급: https://aistudio.google.com/app/apikey)');
       return;
     }
     setIsAnalyzing(true);
@@ -160,7 +160,7 @@ export function AIGrowthCare() {
 전문적이지만 따뜻한 톤으로 작성해주세요.`;
 
       const response = await genAI.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-1.5-flash',
         contents: prompt,
       });
       setAiAnalysis(response.text ?? '분석 결과를 가져올 수 없습니다.');

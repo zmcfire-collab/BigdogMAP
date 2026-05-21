@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dog, BadgeCheck, ScrollText, FileEdit, Sparkles, Stars, RotateCcw, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from './lib/utils';
+import { APP_CONFIG } from './config';
 
 interface DogName {
   name: string;
@@ -79,12 +80,12 @@ JSON 배열만 반환하세요. 형식: [{ "name": "...", "meaning": "...", "isB
   };
 
   const generateViaCloud = async (): Promise<DogName[]> => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string;
-    if (!apiKey) throw new Error('VITE_GEMINI_API_KEY가 설정되지 않았습니다.');
+    const apiKey = APP_CONFIG.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('API 키가 설정되지 않았습니다.');
     const { GoogleGenAI } = await import('@google/genai');
     const genAI = new GoogleGenAI({ apiKey });
     const res = await genAI.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-1.5-flash',
       contents: buildPrompt(),
     });
     return parseNames(res.text ?? '[]');
