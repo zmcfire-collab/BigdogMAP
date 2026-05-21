@@ -56,9 +56,15 @@ JSON 배열만 반환하세요. 형식: [{ "name": "...", "meaning": "...", "isB
 마크다운 없이 순수 JSON만 응답하세요.`.trim();
 
   const parseNames = (raw: string): DogName[] => {
-    const cleaned = raw.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(cleaned);
-    return Array.isArray(parsed) ? parsed : [];
+    try {
+      const match = raw.match(/\[[\s\S]*\]/);
+      if (!match) return [];
+      const parsed = JSON.parse(match[0]);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.error('JSON parsing failed:', e, raw);
+      throw new Error('JSON_PARSE_ERROR');
+    }
   };
 
   const generateViaLocal = async (): Promise<DogName[]> => {
@@ -93,13 +99,17 @@ JSON 배열만 반환하세요. 형식: [{ "name": "...", "meaning": "...", "isB
         : await generateViaCloud();
       if (result.length === 0) throw new Error('빈 결과');
       setNames(result);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(
-        source === 'local'
-          ? 'Ollama 연결 실패. Ollama가 실행 중인지 확인하거나 재시도해주세요.'
-          : 'AI 이름 생성 중 오류가 발생했습니다. API 키를 확인해주세요.'
-      );
+      if (err instanceof Error && err.message === 'JSON_PARSE_ERROR') {
+        setError('AI가 올바르지 않은 형식을 반환했습니다. 다시 시도해주세요.');
+      } else {
+        setError(
+          source === 'local'
+            ? 'Ollama 연결 실패. Ollama가 실행 중인지 확인하거나 재시도해주세요.'
+            : 'AI 이름 생성 중 오류가 발생했습니다. API 키를 확인해주세요.'
+        );
+      }
     } finally {
       setIsGenerating(false);
     }

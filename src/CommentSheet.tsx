@@ -28,6 +28,7 @@ export function CommentSheet({ postId, onClose, onCountChange }: CommentSheetPro
   useEffect(() => {
     if (isDummy) { setLoading(false); return; }
     fetchComments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchComments = async () => {

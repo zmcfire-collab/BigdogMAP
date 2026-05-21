@@ -233,6 +233,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await supabase.from('places').insert(rows as any[]);
     if (error) {
       alert('오류: ' + error.message);

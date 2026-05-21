@@ -13,6 +13,7 @@ import { AdminDashboard } from './AdminDashboard';
 import { JindoLog } from './JindoLog';
 import { AIGrowthCare } from './AIGrowthCare';
 import { DogNameGenerator } from './DogNameGenerator';
+import type { Session } from '@supabase/supabase-js';
 import { supabase, signInWithGoogle } from './supabase';
 import { APP_CONFIG } from './config';
 import './index.css';
@@ -35,7 +36,16 @@ interface Pin {
   type: 'GREEN' | 'RED';
   lat: number;
   lng: number;
-  status?: 'pending' | 'approved' | 'rejected';
+}
+
+interface Review {
+  id: string;
+  user_nickname: string;
+  user_pet_breed: string;
+  user_pet_weight: number | null;
+  content: string;
+  rating: number;
+  created_at: string;
 }
 
 type Tab = 'Map' | 'Feed' | 'Growth' | 'AICare' | 'Hub' | 'Profile' | 'Admin';
@@ -73,7 +83,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<Tab>('Map');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [adminCreds, setAdminCreds] = useState({ id: '', pw: '' });
-  const [userSession, setUserSession] = useState<any>(null);
+  const [userSession, setUserSession] = useState<Session | null>(null);
 
   const [places, setPlaces] = useState<Place[]>(MOCK_PLACES);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
@@ -82,12 +92,16 @@ export default function App() {
   const [reports, setReports] = useState<Pin[]>([]);
   const [hubMode, setHubMode] = useState<'names' | 'share'>('names');
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [placeReviews, setPlaceReviews] = useState<any[]>([]);
+  const [placeReviews, setPlaceReviews] = useState<Review[]>([]);
   const [profileStats, setProfileStats] = useState({ pins: 0, logs: 0, rewards: 0 });
   const [pinMode, setPinMode] = useState<'GREEN' | 'RED' | null>(null); // 제보 모드
   const [clickedLocation, setClickedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [reportName, setReportName] = useState('');
   const clickMarkerRef = useRef<naver.maps.Marker | null>(null);
+
+  // My 페이지 기능 활성화를 위한 상태
+  const [pushEnabled, setPushEnabled] = useState(true);
+  const [activeMyPageModal, setActiveMyPageModal] = useState<string | null>(null);
 
   /* 지도 refs */
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -134,6 +148,7 @@ export default function App() {
         });
 
         // 지도 클릭 이벤트 — 제보 위치 선택
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         window.naver.maps.Event.addListener(naverMapRef.current, 'click', (e: any) => {
           const lat = e.coord.lat();
           const lng = e.coord.lng();
@@ -302,7 +317,6 @@ export default function App() {
       lat: clickedLocation.lat,
       lng: clickedLocation.lng,
       status: 'pending',
-      name: reportName || undefined,
     }]);
     if (error) { alert('제보 중 오류가 발생했습니다.'); return; }
     alert(`${pinMode === 'GREEN' ? '🐾 환영 장소' : '🚫 거부 장소'} 제보가 접수되었습니다.\n관리자 승인 후 지도에 표시됩니다.`);
@@ -310,7 +324,7 @@ export default function App() {
     setClickedLocation(null);
     setReportName('');
     if (clickMarkerRef.current) { clickMarkerRef.current.setMap(null); clickMarkerRef.current = null; }
-  }, [pinMode, clickedLocation, reportName]);
+  }, [pinMode, clickedLocation]);
 
   const toggleFilter = (label: string) =>
     setActiveFilters(prev => prev.includes(label) ? prev.filter(f => f !== label) : [...prev, label]);
@@ -429,18 +443,28 @@ export default function App() {
             </div>
             <div className="space-y-3">
               {[
-                { icon: <Bell size={20} />, label: '알림 및 푸시 설정', right: 'On' },
-                { icon: <Heart size={20} />, label: '찜한 장소 보관함' },
-                { icon: <Users size={20} />, label: '커뮤니티 활동 관리' },
-                { icon: <Settings size={20} />, label: '개인정보 보호 설정' },
+                { id: 'push', icon: <Bell size={20} />, label: '알림 및 푸시 설정', right: pushEnabled ? 'On' : 'Off' },
+                { id: 'favorites', icon: <Heart size={20} />, label: '찜한 장소 보관함' },
+                { id: 'activity', icon: <Users size={20} />, label: '커뮤니티 활동 관리' },
+                { id: 'settings', icon: <Settings size={20} />, label: '개인정보 보호 설정' },
               ].map((item, i) => (
-                <button key={i} className="w-full bg-white p-5 rounded-[28px] border border-[#ebe8e3] flex items-center justify-between group hover:bg-[#315926]/5 transition-all text-[#543013]">
+                <button 
+                  key={i} 
+                  onClick={() => {
+                    if (item.id === 'push') {
+                      setPushEnabled(!pushEnabled);
+                    } else {
+                      setActiveMyPageModal(item.id);
+                    }
+                  }}
+                  className="w-full bg-white p-5 rounded-[28px] border border-[#ebe8e3] flex items-center justify-between group hover:bg-[#315926]/5 transition-all text-[#543013]"
+                >
                   <div className="flex items-center gap-4">
                     <div className="p-2.5 bg-[#fcf9f4] rounded-2xl text-[#715a4a] group-hover:text-[#315926] transition-colors">{item.icon}</div>
                     <span className="text-sm font-bold">{item.label}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {item.right && <span className="text-[10px] font-black text-[#315926] uppercase">{item.right}</span>}
+                    {item.right && <span className={`text-[10px] font-black uppercase ${pushEnabled || item.id !== 'push' ? 'text-[#315926]' : 'text-gray-400'}`}>{item.right}</span>}
                     <ChevronRight size={18} className="opacity-20 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                   </div>
                 </button>
@@ -583,7 +607,7 @@ export default function App() {
                     {placeReviews.length === 0 ? (
                       <div className="bg-[#f0ede9] p-4 rounded-2xl text-center text-sm text-[#715a4a]">첫 번째 리뷰를 남겨보세요!</div>
                     ) : (
-                      placeReviews.slice(0, 2).map((review: any) => (
+                      placeReviews.slice(0, 2).map((review) => (
                         <div key={review.id} className="bg-[#f0ede9] p-4 rounded-2xl space-y-2">
                           <div className="flex items-center justify-between">
                             <div>
@@ -675,13 +699,16 @@ export default function App() {
   return (
     <>
       <header className="app-header">
-        <div className="flex items-center gap-2">
+        <button 
+          onClick={() => setCurrentTab('Map')}
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+        >
           <PawPrint size={22} color="#8B5E3C" fill="#8B5E3C" />
           <h1 style={{ fontSize: '18px', fontWeight: 900, letterSpacing: '-0.5px', color: '#543013' }}>대견할지도</h1>
-        </div>
+        </button>
         <div className="flex gap-4">
-          <button className="p-1" aria-label="검색"><Search size={20} color="#999" /></button>
-          <button className="p-1" aria-label="알림"><Bell size={20} color="#999" /></button>
+          <button className="p-1" aria-label="검색" onClick={() => setActiveMyPageModal('search')}><Search size={20} color="#999" /></button>
+          <button className="p-1" aria-label="알림" onClick={() => setActiveMyPageModal('notification')}><Bell size={20} color="#999" /></button>
         </div>
       </header>
 
@@ -693,6 +720,71 @@ export default function App() {
             place={selectedPlace}
             onClose={() => { setShowReviewModal(false); handleRefreshReviews(); }}
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {activeMyPageModal && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }}
+            className="fixed inset-0 z-[100] bg-white flex flex-col"
+          >
+            <div className="flex items-center justify-between p-4 border-b border-[#ebe8e3]">
+              <h2 className="text-lg font-bold text-[#543013]">
+                {activeMyPageModal === 'favorites' && '찜한 장소 보관함'}
+                {activeMyPageModal === 'activity' && '커뮤니티 활동 관리'}
+                {activeMyPageModal === 'settings' && '개인정보 보호 설정'}
+                {activeMyPageModal === 'search' && '통합 검색'}
+                {activeMyPageModal === 'notification' && '알림 센터'}
+              </h2>
+              <button onClick={() => setActiveMyPageModal(null)} className="p-2 text-[#715a4a] hover:bg-[#f0ede9] rounded-full transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="flex-1 p-6 flex flex-col overflow-y-auto">
+              {activeMyPageModal === 'search' && (
+                <div className="space-y-4 w-full">
+                  <input type="text" placeholder="검색어를 입력하세요..." className="w-full p-4 bg-[#fcf9f4] border border-[#ebe8e3] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#315926]/20" />
+                  <p className="text-sm text-center text-[#715a4a] mt-10">최근 검색어가 없습니다.</p>
+                </div>
+              )}
+              {activeMyPageModal === 'notification' && (
+                <div className="flex flex-col items-center justify-center h-full text-center opacity-70">
+                  <Bell size={48} className="text-[#315926] mb-4" />
+                  <p className="text-[#715a4a] font-bold">새로운 알림이 없습니다.</p>
+                </div>
+              )}
+              {activeMyPageModal === 'favorites' && (
+                <div className="flex flex-col items-center justify-center h-full text-center opacity-70">
+                  <Heart size={48} className="text-[#315926] mb-4" />
+                  <p className="text-[#715a4a] font-bold">아직 찜한 장소가 없습니다.</p>
+                  <p className="text-xs mt-2">지도에서 마음에 드는 장소를 찜해보세요!</p>
+                </div>
+              )}
+              {activeMyPageModal === 'activity' && (
+                <div className="flex flex-col items-center justify-center h-full text-center opacity-70">
+                  <Users size={48} className="text-[#315926] mb-4" />
+                  <p className="text-[#715a4a] font-bold">아직 작성한 글이나 리뷰가 없습니다.</p>
+                  <p className="text-xs mt-2">커뮤니티에 참여하여 다른 보호자들과 소통해보세요!</p>
+                </div>
+              )}
+              {activeMyPageModal === 'settings' && (
+                <div className="w-full space-y-4">
+                  {['프로필 수정', '비밀번호 변경', '로그아웃', '회원 탈퇴'].map(setting => (
+                    <button key={setting} className="w-full p-4 bg-[#fcf9f4] border border-[#ebe8e3] rounded-2xl text-left text-sm font-bold text-[#543013] hover:bg-[#315926]/10 transition-colors">
+                      {setting}
+                    </button>
+                  ))}
+                </div>
+              )}
+              
+              <div className="mt-auto pt-6 flex justify-center">
+                <button onClick={() => setActiveMyPageModal(null)} className="px-6 py-3 bg-[#543013] text-white rounded-2xl font-bold active:scale-95 transition-all">
+                  닫기
+                </button>
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
